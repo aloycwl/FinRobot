@@ -30,7 +30,7 @@ pdfkit==1.0.0
 marker-pdf
 pandas==2.0.3
 aiohttp==3.8.5
-langchain==0.1.20
+langchain==0.2.5
 nltk==3.8.1
 numpy==1.26.4
 ratelimit==2.2.1
