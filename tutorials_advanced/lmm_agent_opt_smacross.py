@@ -5,13 +5,13 @@ from autogen.cache import Cache
 from textwrap import dedent
 
 config_list_4v = autogen.config_list_from_json(
-    "/root/FinRobot/OAI_CONFIG_LIST",
+    "/root/finrobot/OAI_CONFIG_LIST",
     filter_dict={
         "model": ["gpt-4-1106-vision-preview"],
     },
 )
 config_list = autogen.config_list_from_json(
-    "/root/FinRobot/OAI_CONFIG_LIST",
+    "/root/finrobot/OAI_CONFIG_LIST",
     filter_dict={
         "model": ["gpt-4-0125-preview"],
     },

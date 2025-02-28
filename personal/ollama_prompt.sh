@@ -1,0 +1,1 @@
+curl -X POST http://localhost:11434/api/generate -d '{"model": "deepseek-r1:1.5", "prompt": "what is god particle","stream":false}'

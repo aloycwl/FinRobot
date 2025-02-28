@@ -6,7 +6,7 @@ from finrobot.agents.workflow import SingleAssistantShadow
 
 llm_config = {
     "config_list": autogen.config_list_from_json(
-        "/root/FinRobot/OAI_CONFIG_LIST",
+        "/root/finrobot/OAI_CONFIG_LIST",
         filter_dict={
             "model": ["forefront"],
         },
@@ -14,10 +14,10 @@ llm_config = {
     "timeout": 120,
     "temperature": 0.5,
 }
-register_keys_from_json("/root/FinRobot/config_api_keys")
+register_keys_from_json("/root/finrobot/config_api_keys")
 
 # Intermediate results will be saved in this directory
-work_dir = "/root/FinRobot/report"
+work_dir = "/root/finrobot/report"
 os.makedirs(work_dir, exist_ok=True)
 
 assistant = SingleAssistantShadow(

@@ -2,7 +2,7 @@ import requests
 import ollama
 import json
 
-print(ollama.chat(model="gemma2:2b", messages=[{"role": "user", "content": f"""
+print(ollama.chat(model="deepseek-r1:1.5b", messages=[{"role": "user", "content": f"""
 Analyze the following stock price data . Identify trends, patterns, and potential price movements.
 Based on the recent data, provide a **price prediction** for the next trading day, considering key factors like moving averages, volatility, and momentum.
 Your prediction should include:
