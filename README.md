@@ -108,7 +108,7 @@ FinRobot
 ├── requirements.txt
 └── README.md
 ```
-
+ 
 ## Installation:
 
 **1. (Recommended) Create a new virtual environment**
