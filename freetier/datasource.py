@@ -33,7 +33,7 @@ def pmt(op):
   elif op == "3":
     return f"""{txt}{get('TIME_SERIES_DAILY&symbol=NVDA', 'Time Series (Daily)')}"""
   else:
-    end_date = datetime.datetime.now()
-    start_date = end_date - datetime.timedelta(days=7, hours=1)
-    data = yf.download([op], start=start_date, end=end_date, interval='1h')
+    dateE = datetime.datetime.now()
+    dateS = dateE - datetime.timedelta(days=7, hours=1)
+    data = yf.download([op], start=dateS, end=dateE, interval='1h')
     return f"""{txt}{data}"""

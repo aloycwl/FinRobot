@@ -1,0 +1,5 @@
+requests
+groq
+google-generativeai
+pandas
+yfinance
