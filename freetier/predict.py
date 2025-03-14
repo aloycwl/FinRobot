@@ -4,25 +4,23 @@ import sys
 from models import *
 from groq import Groq
 from google import genai
-from prompt import get_content
+from datasource import pmt
 
 selection = sys.argv[1].lower()
+content = pmt(sys.argv[3])
 
 if selection == "gemini":
   client = genai.Client(api_key=os.getenv("GK"))
   res = client.models.generate_content(
     model=gmodel[int(sys.argv[2])],
-    contents=get_content(int(sys.argv[3]))
+    contents=content
   )
   print(res.text)
 
 elif selection == "groq":
-  groq_client = Groq(api_key=os.getenv("QK"))
-  model = qmodel[int(sys.argv[2])]
-  content = get_content(int(sys.argv[3]))
-
-  res = groq_client.chat.completions.create(
-    model=model,
+  client = Groq(api_key=os.getenv("QK"))
+  res = client.chat.completions.create(
+    model=qmodel[int(sys.argv[2])],
     messages=[
       {"role": "system", "content": "you are a top financial trader"},
       {"role": "user", "content": content}
@@ -41,7 +39,7 @@ else:
     json={
       "messages": [
         {"role": "system", "content": "you are top financial trader"},
-        {"role": "user", "content": get_content(int(sys.argv[3]))},
+        {"role": "user", "content": content},
       ]
     },
   )
