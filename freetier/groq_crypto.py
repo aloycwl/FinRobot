@@ -1,6 +1,8 @@
-import requests
 import json
+import requests
 from groq import Groq
+from models import cmodel
+from prompt import content
 
 print(Groq(api_key="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").chat.completions.create(
     model="deepseek-r1-distill-llama-70b", messages=[{"role": "user","content": f"""
