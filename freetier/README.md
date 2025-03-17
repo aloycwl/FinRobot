@@ -31,7 +31,7 @@ export QK=your_groq_api_key
 ## Usage
 
 ```bash
-python prediction.py <provider> <model_id> <prediction_type>
+python predict.py <provider> <model_id> <prediction_type>
 ```
 
 ### Parameters:
@@ -43,14 +43,27 @@ python prediction.py <provider> <model_id> <prediction_type>
 ### Examples:
 
 ```bash
+### Alpha Vantage as the data source
+
 # Cryptocurrency prediction using Cloudflare's Qwen 1.5 7B model
-python prediction.py cloudflare 27 2
+python predict.py cloudflare 27 2
 
 # Stock market analysis using Google Gemini 1.5 pro model
-python prediction.py gemini 4 3
+python predict.py gemini 4 3
 
 # Forex trend prediction using Groq's Mixtral model
-python prediction.py groq 15 1
+python predict.py groq 15 1
+
+### yFinance as the data source
+
+# Cryptocurrency prediction using Cloudflare's Qwen 1.5 7B model
+python predict.py cloudflare 27 'BTC-USD'
+
+# Stock market analysis using Google Gemini 1.5 pro model
+python predict.py gemini 4 'TSLA'
+
+# Forex trend prediction using Groq's Mixtral model
+python predict.py groq 15 'EURUSD=X'
 ```
 
 ## Available Models (models.py)

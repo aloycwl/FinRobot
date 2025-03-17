@@ -20,14 +20,13 @@ def get(url, expected_key):
   else:
     with open(path, 'r') as file:
       data = json.load(file)
-    if expected_key in data:
-      return json.dumps(data[expected_key], indent=2)
+    return json.dumps(data[expected_key], indent=2)
 
-txt = f"Analyze following price data and give the next available **price prediction**:\n"
+txt = f"Analyze following price data and give the next available **price prediction** without explanation:\n"
 
 def pmt(op):
   if op == "1":
-    return f"""{txt}{get('FX_DAILY&from_symbol=GBP&to_symbol=USD', 'Time Series FX (Daily)')}"""
+    return f"""{txt}{get('FX_DAILY&from_symbol=AUD&to_symbol=USD', 'Time Series FX (Daily)')}"""
   elif op == "2":
     return f"""{txt}{get('DIGITAL_CURRENCY_DAILY&symbol=BTC&market=USD', 'Time Series (Digital Currency Daily)')}"""
   elif op == "3":
