@@ -27,7 +27,9 @@ elif selection == "groq":
   ).choices[0].message.content
 
 elif selection == "ollama":
-  text = ollama.chat(model="qwen2:0.5b", messages=role)["message"]["content"]
+  text = ollama.chat(
+    model=int(sys.argv[2]), 
+    messages=role)["message"]["content"]
 
 else:
   headers = {
