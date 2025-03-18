@@ -1,0 +1,25 @@
+modelGroq = [
+  'deepseek-r1-distill-llama-70b',    # 0
+  'deepseek-r1-distill-qwen-32b',     # 1
+  'allam-2-7b',                       # 2
+  'gemma2-9b-it',                     # 3
+  'llama-3.1-8b-instant',             # 4
+  'llama-3.2-11b-vision-preview',     # 5
+  'llama-3.2-1b-preview',             # 6
+  'llama-3.2-3b-preview',             # 7
+  'llama-3.2-90b-vision-preview',     # 8
+  'llama-3.3-70b-specdec',            # 9
+  'llama-3.3-70b-versatile',          # 10
+  'llama-guard-3-8b',                 # 11
+  'llama3-70b-8192',                  # 12
+  'llama3-8b-8192',                   # 13
+  'mistral-saba-24b',                 # 14
+  'mixtral-8x7b-32768',               # 15
+  'qwen-2.5-32b',                     # 16
+  'qwen-2.5-coder-32b',               # 17
+  'qwen-qwq-32b',                     # 18
+  # Object Detection
+  'distil-whisper-large-v3-en',       # 19
+  'whisper-large-v3',                 # 20
+  'whisper-large-v3-turbo'            # 21
+]
