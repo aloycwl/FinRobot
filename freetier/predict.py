@@ -2,15 +2,14 @@ import ollama
 import os
 import requests
 import sys
-from models import *
-from groq import Groq
-from google import genai
 from datasource import pmt
+from google import genai
+from models import *
+from groq import groq
 
 sel = sys.argv[1].lower()
 con = pmt(sys.argv[3])
-rol = [{"role": "system", "content": "you are a top financial trader"},
-  {"role": "user", "content": con}]
+rol = [{"role":"system","content":"you are a top financial trader"},{"role":"user","content":con}]
 
 if sel == "gemini":
   txt = genai.Client(api_key=os.getenv("GK")).models.generate_content(model=gm(),contents=con).text
