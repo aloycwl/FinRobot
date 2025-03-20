@@ -46,13 +46,13 @@ python predict.py <provider> <model_id> <prediction_type>
 ### Alpha Vantage as the data source
 
 # Cryptocurrency prediction using Cloudflare's Qwen 1.5 7B model
-python predict.py cloudflare 27 2
+python predict.py cloudflare 27 2 BTC USD
 
 # Stock market analysis using Google Gemini 1.5 pro model
-python predict.py gemini 4 3
+python predict.py gemini 4 3 AMZN
 
 # Forex trend prediction using Groq's Mixtral model
-python predict.py groq 15 1
+python predict.py groq 15 1 EUR USD
 
 ### yFinance as the data source
 

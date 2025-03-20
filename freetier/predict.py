@@ -5,7 +5,7 @@ import sys
 from datasource import pmt
 from google import genai
 from models import *
-from groq import groq
+from groq import Groq
 
 sel = sys.argv[1].lower()
 con = pmt(sys.argv[3])
