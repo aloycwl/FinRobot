@@ -8,11 +8,9 @@ def dav(url):
   data = requests.get(f"https://alphavantage.co/query?function={url}&apikey={os.getenv('AV')}&outputsize=compact").json()
 
   if 'Meta Data' in data:
-    with open(path, 'w') as file:
-      json.dump(data, file, separators=(',', ':'))
+    with open(path, 'w') as file: json.dump(data, file, separators=(',', ':'))
     
   else:
-    with open(path, 'r') as file:
-      data = json.load(file)
+    with open(path, 'r') as file: data = json.load(file)
   
   return json.dumps(data, separators=(',', ':'))

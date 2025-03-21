@@ -1,14 +1,14 @@
-import ollama
+import ollama as ol
 import os
-import requests
-import sys
+import requests as re
+import sys as sy
 from datasource import pmt
 from google import genai
 from models import *
 from groq import Groq
 
-sel = sys.argv[1].lower()
-con = pmt(sys.argv[3])
+sel = sy.argv[1].lower()
+con = pmt(sy.argv[3])
 rol = [{"role":"system","content":"you are a top financial trader"},{"role":"user","content":con}]
 
 if sel == "gemini":
@@ -18,10 +18,10 @@ elif sel == "groq":
   txt = Groq(api_key=os.getenv("QK")).chat.completions.create(model=qm(),messages=rol).choices[0].message.content
 
 elif sel == "ollama":
-  txt = ollama.chat(model=om(),messages=rol)["message"]["content"]
+  txt = ol.chat(model=om(),messages=rol)["message"]["content"]
 
 else:
-  txt = requests.post(
+  txt = re.post(
     f"https://api.cloudflare.com/client/v4/accounts/{os.getenv('CA')}/ai/run/{cm()}",
     headers={
       "Authorization": f"Bearer {os.getenv('CK')}",
