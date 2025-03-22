@@ -1,4 +1,4 @@
-modelGroq = [
+mq = [
   'deepseek-r1-distill-llama-70b',    # 0
   'deepseek-r1-distill-qwen-32b',     # 1
   'allam-2-7b',                       # 2

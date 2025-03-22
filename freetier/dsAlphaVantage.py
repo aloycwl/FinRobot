@@ -1,16 +1,16 @@
-import json
+import json as js
 import os
 import re
-import requests
+import requests as rq
 
-def dav(url):
+def pullAV(url):
   path = "./data/" + re.sub(r'[^\w\s]', '', url) + ".json"
-  data = requests.get(f"https://alphavantage.co/query?function={url}&apikey={os.getenv('AV')}&outputsize=compact").json()
+  data = rq.get(f"https://alphavantage.co/query?function={url}&apikey={os.getenv('AV')}&outputsize=compact").json()
 
   if 'Meta Data' in data:
-    with open(path, 'w') as file: json.dump(data, file, separators=(',', ':'))
+    with open(path, 'w') as file: js.dump(data, file, separators=(',', ':'))
     
   else:
-    with open(path, 'r') as file: data = json.load(file)
+    with open(path, 'r') as file: data = js.load(file)
   
-  return json.dumps(data, separators=(',', ':'))
+  return js.dumps(data, separators=(',', ':'))

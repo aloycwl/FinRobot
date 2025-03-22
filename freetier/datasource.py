@@ -1,32 +1,27 @@
-import datetime
 import pandas as pd
-import sys
-import yfinance as yf
-from dsAlphaVantage import dav
+import sys as sy
 
-pd.set_option('display.max_rows', None)
+def prompt(tx):
+  pd.set_option('display.max_rows', None)
+  op = sy.argv[3]
 
-def pmt(op):
-  txt = (
-    "Analyze the following high-frequency price data (OHLC) and "
-    "predict the next available price for the next 5-10 minutes.\n"
-  )
+  try: 
+    if 1 <= int(op) <= 3:
+      from dsAlphaVantage import pullAV as pa
+  except:
+    pass
 
   if op == "1":
-    return f"{txt}{dav(f'FX_DAILY&from_symbol={sys.argv[4]}&to_symbol={sys.argv[5]}')}"
+    return f"{tx}{pa(f'FX_DAILY&from_symbol={sy.argv[4]}&to_symbol={sy.argv[5]}')}"
 
   elif op == "2":
-    return f"{txt}{dav(f'DIGITAL_CURRENCY_DAILY&symbol={sys.argv[4]}&market={sys.argv[5]}')}"
+    return f"{tx}{pa(f'DIGITAL_CURRENCY_DAILY&symbol={sy.argv[4]}&market={sy.argv[5]}')}"
 
   elif op == "3":
-    return f"{txt}{dav(f'TIME_SERIES_DAILY&symbol={sys.argv[4]}')}"
+    return f"{tx}{pa(f'TIME_SERIES_DAILY&symbol={sy.argv[4]}')}"
 
   else:
-    df = yf.download(op, interval="1m", period="1d")[['Close']] 
-    df.index = pd.to_datetime(df.index)
-    l2 = df[df.index > (df.index[-1] - pd.Timedelta(hours=2))]
-    l2.index = l2.index.strftime('%y-%m-%d %H:%M')
+    from dsYfinance import pullYF as py
+    return f"{tx}{py(op)}"
 
-    return f"{txt}{l2}"
-
-# print(pmt('EURJPY=X'))
+# print(prompt('EURJPY=X'))

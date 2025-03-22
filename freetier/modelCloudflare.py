@@ -1,4 +1,4 @@
-modelCloudflare = [
+mc = [
     # Text Generation
     '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',  # 0
     '@cf/deepseek-ai/deepseek-math-7b-instruct',     # 1

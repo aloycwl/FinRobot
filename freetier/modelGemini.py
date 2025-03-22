@@ -1,4 +1,4 @@
-modelGemini = [
+mg = [
     'gemini-2.0-flash-lite',            # 0
     'gemini-2.0-flash',                 # 1
     'gemini-1.5-flash',                 # 2
