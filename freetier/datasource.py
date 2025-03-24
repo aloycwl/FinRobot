@@ -2,7 +2,6 @@ import pandas as pd
 import sys as sy
 
 def prompt(tx):
-  pd.set_option('display.max_rows', None)
   op = sy.argv[3]
 
   try: 
