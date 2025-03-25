@@ -1,5 +1,5 @@
-import requests as rq
 import os
+import requests as rq
 from datetime import datetime as dt
 
 def news():
@@ -9,7 +9,7 @@ def news():
   }).json()
 
   nf = [
-      f"{dt.strptime(ne['created_at'], '%Y-%m-%dT%H:%M:%SZ').strftime('%Y-%m-%d %H:%M')} {ne['title']}"
+      f"{dt.strptime(ne['created_at'], '%Y-%m-%dT%H:%M:%SZ').strftime('%y-%m-%d %H:%M')} {ne['title']}"
       for ne in ns.get("results", [])
   ]
 
