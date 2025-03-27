@@ -1,7 +1,7 @@
 import pandas as pd
 import sys as sy
 
-def timeseries():
+def ts() -> str:
   op = sy.argv[3]
 
   try: 

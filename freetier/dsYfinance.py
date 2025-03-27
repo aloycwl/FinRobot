@@ -1,7 +1,7 @@
 import yfinance as yf
 import pandas as pd
 
-def pullYF(op):
+def pullYF(op) -> str:
     pd.set_option('display.max_rows', None)
 
     df = yf.download(op, interval="1m", period="1d")#[['Close']] 

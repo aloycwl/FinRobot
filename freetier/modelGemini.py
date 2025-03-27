@@ -1,4 +1,7 @@
-mg = [
+import sys as sy
+
+def mo() -> str:
+  ms = [
     'gemini-2.0-flash-lite',            # 0
     'gemini-2.0-flash',                 # 1
     'gemini-2.0-pro-exp-02-05',         # 2
@@ -7,4 +10,6 @@ mg = [
     'gemini-1.5-pro',                   # 5
     'gemini-embedding-exp',             # 6
     'imagen-3.0-generate-002'           # 7
-]
+  ]
+
+  return ms[int(sy.argv[2])]

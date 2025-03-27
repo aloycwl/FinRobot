@@ -2,7 +2,7 @@ import os
 import requests as rq
 from datetime import datetime as dt
 
-def news():
+def ne() -> str:
   ns = rq.get("https://cryptopanic.com/api/v1/posts/", params={
     "auth_token":os.getenv('CP'),
     "currencies":"BTC,ETH"
@@ -13,4 +13,8 @@ def news():
       for ne in ns.get("results", [])
   ]
 
-  return "\n".join(nf)
+  ns = "\n".join(nf)
+
+  print(ns)
+
+  return ns

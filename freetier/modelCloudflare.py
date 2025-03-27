@@ -1,4 +1,7 @@
-mc = [
+import sys as sy
+
+def mo() -> str: 
+  ms = [
     # Text Generation
     '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',  # 0
     '@cf/deepseek-ai/deepseek-math-7b-instruct',     # 1
@@ -58,4 +61,6 @@ mc = [
     '@cf/unum/uform-gen2-qwen-500m',                 # 61
     # Object Detection
     '@cf/facebook/detr-resnet-50'                    # 62
-]
+  ]
+
+  return ms[int(sy.argv[2])]

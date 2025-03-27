@@ -3,7 +3,7 @@ import os
 import re
 import requests as rq
 
-def pullAV(url):
+def pullAV(url) -> str:
   path = "./data/" + re.sub(r'[^\w\s]', '', url) + ".json"
   data = rq.get(f"https://alphavantage.co/query?function={url}&apikey={os.getenv('AV')}&outputsize=compact").json()
 

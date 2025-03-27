@@ -1,8 +1,8 @@
-from cryptopanic import news as ne
-from datasource import timeseries as ts
-from models import models as mo
+from dsCryptopanic import ne
+from datasource import ts
+from models import md
 
-print(mo("you are an expert financial analyst",
+md("you are an expert financial analyst",
 
 f"""Analyze the following market price and news to predict the trend and price for the next 5-10 minutes:
 
@@ -10,4 +10,4 @@ f"""Analyze the following market price and news to predict the trend and price f
 {ts()}
 
 **Latest News**
-{ne()}"""))
+{ne()}""")
