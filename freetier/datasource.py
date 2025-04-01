@@ -22,3 +22,6 @@ def ts() -> str:
   else:
     from dsYfinance import pullYF as py
     return py(op)
+
+
+# print(ts())
