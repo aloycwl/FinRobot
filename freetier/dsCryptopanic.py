@@ -9,8 +9,8 @@ def ne() -> str:
   }).json()
 
   nf = [
-      f"{dt.strptime(ne['created_at'], '%Y-%m-%dT%H:%M:%SZ').strftime('%y-%m-%d %H:%M')} {ne['title']}"
-      for ne in ns.get("results", [])
+    f"{dt.strptime(ne['created_at'], '%Y-%m-%dT%H:%M:%SZ').strftime('%y-%m-%d %H:%M')} {ne['title']}"
+    for ne in ns.get("results", [])
   ]
 
   ns = "\n".join(nf)
@@ -18,3 +18,5 @@ def ne() -> str:
   print(ns)
 
   return ns
+
+ne()

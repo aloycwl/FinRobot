@@ -11,6 +11,3 @@ f"""Analyze the following market price and news to predict the trend and price f
 
 **Latest News**
 {ne()}""")
-
-
-# print(ts())
