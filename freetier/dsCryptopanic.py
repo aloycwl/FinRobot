@@ -18,5 +18,3 @@ def ne() -> str:
   print(ns)
 
   return ns
-
-ne()

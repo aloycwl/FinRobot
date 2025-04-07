@@ -11,5 +11,3 @@ def pullYF(op) -> str:
   df.index = pd.to_datetime(df.index)
   df.index = df.index.strftime('%y-%m-%d %H:%M')
   return(df)
-
-print(pullYF('BTC-USD'))
