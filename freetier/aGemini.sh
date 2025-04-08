@@ -1,1 +1,0 @@
-python3 ~/finrobot/freetier/predict.py gemini 0 'BTC-USD'

@@ -1,1 +1,0 @@
-python3 ~/finrobot/freetier/predict.py groq 0 'BTC-USD'

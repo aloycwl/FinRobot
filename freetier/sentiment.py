@@ -2,10 +2,10 @@ import requests as re
 
 def se() -> str:
 
-  dat = re.get("https://api.alternative.me/fng/?limit=10&date_format=us").json()
+  da = re.get("https://api.alternative.me/fng/?limit=10&date_format=us").json()
 
-  txt = "date,fng_value,fng_classification\n"
-  for itm in dat['data']:
-    txt += f"{itm['timestamp']},{itm['value']},{itm['value_classification']}\n"
+  tx = "date,fng_value,fng_classification\n"
+  for itm in da['data']:
+    tx += f"{itm['timestamp']},{itm['value']},{itm['value_classification']}\n"
 
-  return(txt)
+  return(tx)

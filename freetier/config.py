@@ -1,0 +1,5 @@
+ml = 'groq'
+mo = 'gemini-2.0-flash-lite'
+op = 'BTC-USD'
+p1 = 'BTC'
+p2 = 'USD'

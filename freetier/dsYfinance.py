@@ -7,7 +7,7 @@ def pullYF(op) -> str:
   de = dt.datetime.now()
   ds = de - dt.timedelta(hours=12)
 
-  df = yf.download(op, interval="5m", start=ds, end=de)#[['Close']] 
+  df = yf.download(op, interval="5m", start=ds, end=de) 
   df.index = pd.to_datetime(df.index)
   df.index = df.index.strftime('%y-%m-%d %H:%M')
   return(df)
