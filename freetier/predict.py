@@ -1,8 +1,8 @@
+from dsAlternative import se
 from dsCryptopanic import ne
 from datasource import ts
 from marketdepth import ma
 from models import md
-from sentiment import se
 import config as cf
 
 cm = "You are a master FX strategist and market analyst with deep knowledge of global macroeconomics, technical analysis, and risk management"
