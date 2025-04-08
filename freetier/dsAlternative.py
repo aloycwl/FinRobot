@@ -8,4 +8,4 @@ def se() -> str:
   for itm in da['data']:
     tx += f"{itm['timestamp']},{itm['value']},{itm['value_classification']}\n"
 
-  return(tx)
+  return tx

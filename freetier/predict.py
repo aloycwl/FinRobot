@@ -12,7 +12,7 @@ and another other indicators that could be useful for prediction.
 Together with the following news, market depth and market sentiment to predict the trend and price for the next 30 minutes:
 
 **Time Series**
-{ds()}
+{ts()}
 
 **Latest News**
 {ne()}

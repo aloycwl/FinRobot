@@ -3,6 +3,7 @@ import requests as rq
 from datetime import datetime as dt
 
 def ne() -> str:
+  
   tx = rq.get("https://cryptopanic.com/api/v1/posts/", params={
     "auth_token":os.getenv('CP'),
     "currencies":"BTC,ETH"
@@ -13,6 +14,4 @@ def ne() -> str:
     for ne in tx.get("results", [])
   ]
 
-  tx = "\n".join(nf)
-
-  return tx
+  return "\n".join(nf) 
