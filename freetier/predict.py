@@ -1,6 +1,6 @@
 from dsAlternative import se
 from dsCryptopanic import ne
-from datasource import ts
+from dsTimeSeries import ts
 from marketdepth import ma
 from models import md
 import config as cf
@@ -12,7 +12,7 @@ and another other indicators that could be useful for prediction.
 Together with the following news, market depth and market sentiment to predict the trend and price for the next 30 minutes:
 
 **Time Series**
-{ts()}
+{ds()}
 
 **Latest News**
 {ne()}

@@ -1,4 +1,3 @@
-import pandas as pd
 import config as cf
 
 def ts() -> str:
