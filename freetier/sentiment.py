@@ -1,25 +1,11 @@
-# import requests
-# import pandas as pd
+import requests as re
 
-# API_KEY = 'jyqdin0qf8tnspz8iwc949zmgm96psmxv89y7wta'
-# symbol = 'BTC'
+def se() -> str:
 
-# url = f'https://lunarcrush.com/v4?data=assets&key={API_KEY}&symbol={symbol}'
+  dat = re.get("https://api.alternative.me/fng/?limit=10&date_format=us").json()
 
-# response = requests.get(url)
-# data = response.json()
+  txt = "date,fng_value,fng_classification\n"
+  for itm in dat['data']:
+    txt += f"{itm['timestamp']},{itm['value']},{itm['value_classification']}\n"
 
-# btc_sentiment = data['data'][0]
-# print(btc_sentiment['galaxy_score'], btc_sentiment['alt_rank'], btc_sentiment['social_score'])
-
-
-import requests
-
-url = "https://lunarcrush.com/api4/public/coins/list/v2"
-headers = {
-  'Authorization': 'Bearer jyqdin0qf8tnspz8iwc949zmgm96psmxv89y7wta'
-}
-
-response = requests.request("GET", url, headers=headers)
-
-print(response.text.encode('utf8'))
+  return(txt)

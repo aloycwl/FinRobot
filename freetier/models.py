@@ -2,6 +2,7 @@ import os
 import sys as sy
 
 def md(cm, co) -> str:
+  print(co)
   ro = [{"role":"system","content":cm},{"role":"user","content":co}]
   se = sy.argv[1]
 

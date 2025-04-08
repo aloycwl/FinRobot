@@ -15,6 +15,4 @@ def ne() -> str:
 
   ns = "\n".join(nf)
 
-  print(ns)
-
   return ns
