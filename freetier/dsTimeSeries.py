@@ -17,6 +17,9 @@ def ts() -> str:
   elif cf.op == "3":
     return pa(f'TIME_SERIES_DAILY&symbol={cf.p1}')
 
+  elif cf.op == "B":
+    from dsBinance import pullBinance as pb
+    return pb()
   else:
     from dsYfinance import pullYF as py
     return py(cf.op)

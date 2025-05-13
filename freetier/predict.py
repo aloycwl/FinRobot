@@ -11,24 +11,20 @@ formulate RSI, EMA, MACD, Bollinger Bands, Stochastic, ATR, Parabolic, Harmonics
 and another other indicators that could be useful for prediction.
 Together with the following news, market depth and market sentiment to predict the trend and price for the next 30 minutes:
 
-**Time Series**
-{ts()}
+*Time Series*\n{ts()}
 
-**Latest News**
-{ne()}
+*Latest News*\n{ne()}
 
-**Market Depth**
-{ma()}
+*Market Depth*\n{ma()}
 
-**Market Sentiment**
-{se()}"""
+*Market Sentiment*\n{se()}"""
 
 print(co)
 
 cf.ml = 'groq'
-cf.mo ='deepseek-r1-distill-llama-70b'
+cf.mo = 'deepseek-r1-distill-llama-70b'
 print(md(cm, co))
 
 cf.ml = 'gemini'
-cf.mo ='gemini-2.0-flash-lite'
+cf.mo = 'gemini-2.0-flash-lite'
 print(md(cm, co))
