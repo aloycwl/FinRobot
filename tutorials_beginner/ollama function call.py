@@ -17,7 +17,7 @@ config_list = [
 
 llm_config = {"config_list": config_list, "timeout": 120, "temperature": 0}
 
-register_keys_from_json("/root/FinRobot/config_api_keys")
+register_keys_from_json("/root/finrobot/config_api_keys")
 
 analyst = AssistantAgent(
     name="Market_Analyst",

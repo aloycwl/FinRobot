@@ -12,7 +12,7 @@ config_list = autogen.config_list_from_json(
 llm_config = {"config_list": config_list, "timeout": 120, "temperature": 0}
 
 # Register FINNHUB API keys
-register_keys_from_json("/root/FinRobot/config_api_keys")
+register_keys_from_json("/root/finrobot/config_api_keys")
 
 analyst = autogen.AssistantAgent(
     name="Market_Analyst",

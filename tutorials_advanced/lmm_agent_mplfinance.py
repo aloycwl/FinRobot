@@ -14,23 +14,23 @@ from matplotlib import pyplot as plt
 from PIL import Image
 
 config_list_4v = autogen.config_list_from_json(
-    "/root/FinRobot/OAI_CONFIG_LIST",
+    "/root/finrobot/OAI_CONFIG_LIST",
     filter_dict={
         "model": ["gpt-4-1106-vision-preview"],
     },
 )
 config_list_gpt4 = autogen.config_list_from_json(
-    "/root/FinRobot/OAI_CONFIG_LIST",
+    "/root/finrobot/OAI_CONFIG_LIST",
     filter_dict={
         "model": ["gpt-4-0125-preview"],
     },
 )
 
 # Register FINNHUB API keys for later use
-register_keys_from_json("/root/FinRobot/config_api_keys")
+register_keys_from_json("/root/finrobot/config_api_keys")
 
 # Intermediate results/charts will be saved in this directory
-working_dir = "/root/FinRobot/coding"
+working_dir = "/root/finrobot/coding"
 os.makedirs(working_dir, exist_ok=True)
 
 market_analyst = MultimodalConversableAgent(
