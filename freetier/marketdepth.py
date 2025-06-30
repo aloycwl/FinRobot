@@ -1,15 +1,18 @@
 import requests as re
 
 def ma() -> str:
+    b = re.get("https://www.okx.com/api/v5/market/books",
+                     params={
+                         "instId": "BTC-USDT",
+                         "sz": "50"
+                     }).json()['data'][0]
 
-  de = re.get("https://api.binance.com/api/v3/depth", params={"symbol":"BTCUSDT","limit":50}).json()
+    t = "Bids:\n"
+    for price, qty, *others in b['bids']:
+        t += f"Price: {price}  Quantity: {qty}\n"
 
-  tx = "Bids:\n"
-  for bid in de['bids']:
-    tx +=f"Price: {bid[0]}  Quantity: {bid[1]}\n"
+    t += "\nAsks:\n"
+    for price, qty, *others in b['asks']:
+        t += f"Price: {price}  Quantity: {qty}\n"
 
-  tx += "\nAsks:\n"
-  for ask in de['asks']:
-    tx += f"Price: {ask[0]}  Quantity: {ask[1]}\n"
-
-  return tx
+    return t

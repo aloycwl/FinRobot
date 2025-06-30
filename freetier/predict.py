@@ -9,7 +9,7 @@ cm = "You are a master FX strategist and market analyst with deep knowledge of g
 co = f"""Analyze the following OHLC market price data, 
 formulate RSI, EMA, MACD, Bollinger Bands, Stochastic, ATR, Parabolic, Harmonics, Fibonacci, Gann,
 and another other indicators that could be useful for prediction.
-Together with the following news, market depth and market sentiment to predict the trend and price for the next 30 minutes:
+Together with the following news, market depth and market sentiment to give me real-time trading plan for the next 3 hours:
 
 *Time Series*\n{ts()}
 
@@ -21,10 +21,6 @@ Together with the following news, market depth and market sentiment to predict t
 
 print(co)
 
-cf.ml = 'groq'
-cf.mo = 'deepseek-r1-distill-llama-70b'
-print(md(cm, co))
-
-cf.ml = 'gemini'
-cf.mo = 'gemini-2.0-flash-lite'
+cf.ml = 'nvidia'
+cf.mo = 'qwen/qwen3-235b-a22b'
 print(md(cm, co))
