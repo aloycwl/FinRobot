@@ -1,5 +1,8 @@
 # AC finrobot Prediction
 
+Demo
+[![Watch on YouTube](https://img.youtube.com/vi/dOocHHLX814/0.jpg)](https://www.youtube.com/watch?v=dOocHHLX814)
+
 AC finrobot Prediction is a mini AI program that allows users to select different free-tier AI models for predicting various financial data, including cryptocurrency and stock prices. This tool uses multiple AI APIs to generate predictions based on the selected model and data type.
 
 Using
@@ -96,10 +99,5 @@ ac-finrobot-prediction/
 - Prediction accuracy depends on model quality and data freshness
 - Not recommended for production financial decision-making
 
-## License
-
-MIT
-
-## Disclaimer
-
-This tool is for educational and research purposes only. Financial predictions should not be taken as financial advice. Always consult with a qualified financial advisor before making investment decisions.
+## Upcoming Improvements
+![AI Trading](https://cdn.jsdelivr.net/gh/aloycwl/FinRobot@main/img/ai_trading.png)
