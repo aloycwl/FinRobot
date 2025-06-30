@@ -3,3 +3,5 @@ groq
 google-generativeai
 pandas
 yfinance
+dotenv
+openai
