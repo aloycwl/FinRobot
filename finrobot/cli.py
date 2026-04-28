@@ -4,17 +4,10 @@ import json
 
 from .config import settings
 from .data_sources import fetch_fear_greed, fetch_market_depth, fetch_news, fetch_okx_candles
-from .hft import HFTConfig, TrendMartingaleConfig, backtest
+from .hft import HFTConfig, backtest
 from .indicators import enrich_indicators
 from .llm import llm_prediction
-from .mt5_executor import (
-    MT5Credentials,
-    connect,
-    place_market_order,
-    run_trend_martingale_autotrade,
-    shutdown,
-    download_m1_history,
-)
+from .mt5_executor import MT5Credentials, connect, place_market_order, shutdown
 
 
 MENU = {
@@ -24,8 +17,6 @@ MENU = {
     "4": "Train CNN and predict 10 steps",
     "5": "Backtest fast strategy",
     "6": "Place MT5 live market order",
-    "7": "Start MT5 auto-trading (1m + 5m EMA filter + martingale)",
-    "8": "Backtest MT5 1m data (up to 1 year)",
     "0": "Exit",
 }
 
@@ -99,62 +90,18 @@ def option_backtest() -> None:
     print(json.dumps(results, indent=2))
 
 
-def _ask_mt5_credentials() -> MT5Credentials:
+def option_mt5_order() -> None:
     login = settings.mt5_login or int(input("MT5 login: "))
     password = settings.mt5_password or input("MT5 password: ")
     server = settings.mt5_server or input("MT5 server: ")
-    return MT5Credentials(login=login, password=password, server=server)
-
-
-def option_mt5_order() -> None:
-    creds = _ask_mt5_credentials()
     symbol = input("Symbol (e.g., BTCUSD): ").strip()
     side = input("Side (buy/sell): ").strip().lower()
     lot = float(input("Lot size: "))
 
-    mt5 = connect(creds)
+    mt5 = connect(MT5Credentials(login=login, password=password, server=server))
     try:
         result = place_market_order(mt5, symbol=symbol, side=side, lot=lot)
         print(f"Order sent successfully: {result}")
-    finally:
-        shutdown(mt5)
-
-
-def option_mt5_autotrade() -> None:
-    creds = _ask_mt5_credentials()
-    symbol = input("Symbol (e.g., BTCUSD): ").strip()
-    base_lot = float(input("Base lot (e.g., 0.01): ").strip() or "0.01")
-    multiplier = float(input("Martingale multiplier (e.g., 2.0): ").strip() or "2.0")
-    max_steps = int(input("Max martingale steps (e.g., 4): ").strip() or "4")
-    cycles = int(input("How many 1m cycles to run (e.g., 30): ").strip() or "30")
-
-    mt5 = connect(creds)
-    try:
-        cfg = TrendMartingaleConfig(base_lot=base_lot, multiplier=multiplier, max_steps=max_steps)
-        run_trend_martingale_autotrade(mt5, symbol=symbol, cfg=cfg, cycles=cycles, sleep_seconds=60)
-    finally:
-        shutdown(mt5)
-
-
-def option_mt5_backtest() -> None:
-    from .backtesting import BacktestConfig, backtest_trend_martingale
-
-    creds = _ask_mt5_credentials()
-    symbol = input("Symbol (e.g., BTCUSD): ").strip()
-    days = int(input("Lookback days (e.g., 365): ").strip() or "365")
-    base_lot = float(input("Base lot (e.g., 0.01): ").strip() or "0.01")
-    multiplier = float(input("Martingale multiplier (e.g., 2.0): ").strip() or "2.0")
-    max_steps = int(input("Max martingale steps (e.g., 4): ").strip() or "4")
-
-    mt5 = connect(creds)
-    try:
-        m1 = download_m1_history(mt5, symbol=symbol, days=days)
-        stats = backtest_trend_martingale(
-            m1,
-            BacktestConfig(base_lot=base_lot, multiplier=multiplier, max_steps=max_steps),
-        )
-        print("Backtest result:")
-        print(json.dumps(stats, indent=2))
     finally:
         shutdown(mt5)
 
@@ -175,10 +122,6 @@ def main() -> None:
             option_backtest()
         elif choice == "6":
             option_mt5_order()
-        elif choice == "7":
-            option_mt5_autotrade()
-        elif choice == "8":
-            option_mt5_backtest()
         elif choice == "0":
             print("Goodbye")
             break

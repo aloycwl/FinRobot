@@ -72,41 +72,12 @@ export MT5_SERVER="Broker-Server"
 python -m finrobot
 ```
 
-Then choose from menu:
-
-- `6` for one manual MT5 market order
-- `7` to start MT5 auto-trading strategy loop
-- `8` to run MT5 1-minute historical backtest (e.g., 365 days)
-
-
-## MT5 historical backtesting (menu option 8)
-
-- Downloads **M1 data directly from MT5** via `copy_rates_range` for the lookback window (default 365 days).
-- Builds 5-minute EMA(5)/EMA(20) trend filter from that M1 history.
-- Runs trend + martingale backtest and prints:
-  - total return
-  - max drawdown
-  - win rate
-  - trade count
-
-## Strategy logic (menu option 7)
-
-- Trend detection on **5m** candles:
-  - Compute EMA(5) and EMA(20)
-- Entry decision on each **1m** cycle:
-  - If latest 1m close is above both 5m EMAs => `LONG`
-  - If latest 1m close is below both 5m EMAs => `SHORT`
-  - Otherwise => no trade
-- Martingale sizing:
-  - Uses base lot, multiplier, and max steps
-  - On last closed loss, step increases (capped)
-  - On last closed profit, step resets to base lot
+You can then select actions by number from the interactive menu.
 
 ## Safety and expectations
 
 - This code is designed for research and iterative improvement.
 - No strategy can guarantee fixed returns (e.g. 5%/hour) in live markets.
-- Martingale increases risk sharply; always use a cap (`max_steps`) and small base lot.
 - Always start with backtesting + paper/demo trading before any real capital.
 - Add robust risk controls (max drawdown stop, position caps, circuit-breakers) before production use.
 
