@@ -107,5 +107,17 @@ def run_trend_martingale_autotrade(
         time.sleep(sleep_seconds)
 
 
+def download_m1_history(mt5, symbol: str, days: int = 365):
+    """Download M1 history from MT5 for a lookback window in days."""
+    utc_now = datetime.now(timezone.utc)
+    utc_from = utc_now - timedelta(days=days)
+    rates = mt5.copy_rates_range(symbol, mt5.TIMEFRAME_M1, utc_from, utc_now)
+    if rates is None or len(rates) == 0:
+        raise RuntimeError(f"No M1 history returned for {symbol} over {days} days")
+    frame = pd.DataFrame(rates)
+    frame["time"] = pd.to_datetime(frame["time"], unit="s", utc=True)
+    return frame
+
+
 def shutdown(mt5):
     mt5.shutdown()

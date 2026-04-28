@@ -13,6 +13,7 @@ from .mt5_executor import (
     place_market_order,
     run_trend_martingale_autotrade,
     shutdown,
+    download_m1_history,
 )
 
 
@@ -24,6 +25,7 @@ MENU = {
     "5": "Backtest fast strategy",
     "6": "Place MT5 live market order",
     "7": "Start MT5 auto-trading (1m + 5m EMA filter + martingale)",
+    "8": "Backtest MT5 1m data (up to 1 year)",
     "0": "Exit",
 }
 
@@ -134,6 +136,29 @@ def option_mt5_autotrade() -> None:
         shutdown(mt5)
 
 
+def option_mt5_backtest() -> None:
+    from .backtesting import BacktestConfig, backtest_trend_martingale
+
+    creds = _ask_mt5_credentials()
+    symbol = input("Symbol (e.g., BTCUSD): ").strip()
+    days = int(input("Lookback days (e.g., 365): ").strip() or "365")
+    base_lot = float(input("Base lot (e.g., 0.01): ").strip() or "0.01")
+    multiplier = float(input("Martingale multiplier (e.g., 2.0): ").strip() or "2.0")
+    max_steps = int(input("Max martingale steps (e.g., 4): ").strip() or "4")
+
+    mt5 = connect(creds)
+    try:
+        m1 = download_m1_history(mt5, symbol=symbol, days=days)
+        stats = backtest_trend_martingale(
+            m1,
+            BacktestConfig(base_lot=base_lot, multiplier=multiplier, max_steps=max_steps),
+        )
+        print("Backtest result:")
+        print(json.dumps(stats, indent=2))
+    finally:
+        shutdown(mt5)
+
+
 def main() -> None:
     while True:
         show_menu()
@@ -152,6 +177,8 @@ def main() -> None:
             option_mt5_order()
         elif choice == "7":
             option_mt5_autotrade()
+        elif choice == "8":
+            option_mt5_backtest()
         elif choice == "0":
             print("Goodbye")
             break

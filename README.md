@@ -32,10 +32,12 @@ finrobot/
   ml.py
   hft.py
   mt5_executor.py
+  backtesting.py
 
 tests/
   test_indicators.py
   test_hft.py
+  test_backtesting.py
 
 requirements.txt
 README.md
@@ -74,6 +76,18 @@ Then choose from menu:
 
 - `6` for one manual MT5 market order
 - `7` to start MT5 auto-trading strategy loop
+- `8` to run MT5 1-minute historical backtest (e.g., 365 days)
+
+
+## MT5 historical backtesting (menu option 8)
+
+- Downloads **M1 data directly from MT5** via `copy_rates_range` for the lookback window (default 365 days).
+- Builds 5-minute EMA(5)/EMA(20) trend filter from that M1 history.
+- Runs trend + martingale backtest and prints:
+  - total return
+  - max drawdown
+  - win rate
+  - trade count
 
 ## Strategy logic (menu option 7)
 
