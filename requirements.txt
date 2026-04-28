@@ -1,7 +1,13 @@
+python-dotenv
 requests
-groq
-google-generativeai
 pandas
-yfinance
-dotenv
+numpy
+matplotlib
+plotly
+scikit-learn
+tensorflow
+pyharmonics
 openai
+yfinance
+MetaTrader5
+pytest

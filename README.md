@@ -1,103 +1,107 @@
-# AC finrobot Prediction
+# FinRobot
 
-Demo
-[![Watch on YouTube](https://img.youtube.com/vi/dOocHHLX814/0.jpg)](https://www.youtube.com/watch?v=dOocHHLX814)
+FinRobot is a modular algorithmic trading workspace for crypto/FX research, model experimentation, and optional live execution.
 
-AC finrobot Prediction is a mini AI program that allows users to select different free-tier AI models for predicting various financial data, including cryptocurrency and stock prices. This tool uses multiple AI APIs to generate predictions based on the selected model and data type.
+## What this repo now provides
 
-Using
-- Time series data
-- Latest news
-- Market depth
-- Market sentiment
+- Clean Python package structure (`finrobot/`) with separate modules for data, indicators, ML, strategy, and execution.
+- Numeric command menu for day-to-day operations.
+- Integrated market snapshot pipeline:
+  - OKX candles
+  - CryptoPanic headlines
+  - OKX orderbook depth
+  - Alternative.me fear & greed
+- LSTM/CNN predictive pipelines converted from notebook-style logic into reusable functions.
+- Fast non-LLM strategy engine skeleton (EMA crossover + transaction cost aware backtest).
+- MetaTrader 5 execution connector with configurable credentials.
+- MT5 auto-trading mode with:
+  - 1-minute execution cycle
+  - 5-minute EMA(5) and EMA(20) trend filter
+  - optional capped martingale lot sizing
 
-Data source
-- Time series data from OKX
-- News from Crypto Panic
-- Market depth from OKX
-- Market sentiment from Alternate
+## Project layout
 
-## Features
+```text
+finrobot/
+  __main__.py
+  cli.py
+  config.py
+  data_sources.py
+  indicators.py
+  llm.py
+  ml.py
+  hft.py
+  mt5_executor.py
 
-- Select and interact with various free-tier AI models such as Cloudflare, Gemini, and Groq for different types of predictions.
-- Predict cryptocurrency data, forex, and more using different prompts and models.
-- Simple command-line interface to select and call prediction functions.
-- Fetch time series data from source and store it locally, if free usage is up, fetch from local storage instead.
+tests/
+  test_indicators.py
+  test_hft.py
 
-## API Keys Setup
+requirements.txt
+README.md
+```
 
-Before using AC FinRobot, you'll need to obtain API keys from the following services:
+## Setup
 
-1. **AlphaVantage** - For financial data ([Get API Key](https://www.alphavantage.co/support/#api-key))
-2. **Cloudflare Workers AI** - For AI model access ([Get API Key](https://developers.cloudflare.com/workers-ai/get-started/))
-3. **Google Gemini** - For alternative AI model access ([Get API Key](https://ai.google.dev/docs/gemini-api/setup))
-4. **Groq** - For high-speed inference ([Get API Key](https://console.groq.com/keys))
-5. **Nvidia** - For access to many free and unlimited models ([Get API Key](https://build.nvidia.com/settings/api-keys))
-
-Set up your environment variables:
+1. Create virtual environment and install dependencies:
 
 ```bash
-export AV=your_alphavantage_api_key
-export CA=your_cloudflare_account_id
-export CK=your_cloudflare_api_key
-export GK=your_gemini_api_key
-export QK=your_groq_api_key
-export NV=your_nvidia_api_key
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-## Usage
+2. Configure environment variables:
 
 ```bash
-python predict.py
+export CP="your_cryptopanic_token"
+export NV="your_nvidia_key"
+export NVIDIA_MODEL="qwen/qwen3-235b-a22b"
+
+# optional MT5
+export MT5_LOGIN="12345678"
+export MT5_PASSWORD="your_password"
+export MT5_SERVER="Broker-Server"
 ```
 
-```python
-#predict.py
-cf.ml = 'nvidia'
-cf.mo = 'qwen/qwen3-235b-a22b'
+## Run
+
+```bash
+python -m finrobot
 ```
 
-### Parameters:
+Then choose from menu:
 
-- `cf.mo`: AI service provider (cloudflare, gemini, groq, nvidia, ollama)
-- `cf.ml`: ID of the model
-- `prediction_type`: Type of financial prediction from prompt.py
+- `6` for one manual MT5 market order
+- `7` to start MT5 auto-trading strategy loop
 
-### Examples:
+## Strategy logic (menu option 7)
 
-```python
-# using nvidia API
-cf.ml = 'nvidia'
-# qwen model
-cf.mo = 'qwen/qwen3-235b-a22b'
+- Trend detection on **5m** candles:
+  - Compute EMA(5) and EMA(20)
+- Entry decision on each **1m** cycle:
+  - If latest 1m close is above both 5m EMAs => `LONG`
+  - If latest 1m close is below both 5m EMAs => `SHORT`
+  - Otherwise => no trade
+- Martingale sizing:
+  - Uses base lot, multiplier, and max steps
+  - On last closed loss, step increases (capped)
+  - On last closed profit, step resets to base lot
 
-# using Google
-cf.ml = 'google'
-# gemini model
-cf.mo = 'gemini-2.5-pro'
-```
+## Safety and expectations
 
-## Available Models
-Go to the respective models documentation or official page to find out more
+- This code is designed for research and iterative improvement.
+- No strategy can guarantee fixed returns (e.g. 5%/hour) in live markets.
+- Martingale increases risk sharply; always use a cap (`max_steps`) and small base lot.
+- Always start with backtesting + paper/demo trading before any real capital.
+- Add robust risk controls (max drawdown stop, position caps, circuit-breakers) before production use.
 
-## Prediction Types (prompt.py)
-View prompt.py to find out more
+## Iteration loop
 
-## Key Project Structure
+Use the workflow below for continuous improvement:
 
-```
-ac-finrobot-prediction/
-├── prediction.py      # Main script
-├── models.py          # AI model definitions
-├── prompt.py          # Prediction type templates
-└── README.md          # This file
-```
-
-## Limitations
-
-- Uses free-tier API services, which have rate limits
-- Prediction accuracy depends on model quality and data freshness
-- Not recommended for production financial decision-making
-
-## Upcoming Improvements
-![AI Trading](https://cdn.jsdelivr.net/gh/aloycwl/FinRobot@main/img/ai_trading.png)
+1. Backtest strategy
+2. Inspect metrics and failure modes
+3. Adjust signal + risk parameters
+4. Re-test and compare
+5. Only then consider live deployment
