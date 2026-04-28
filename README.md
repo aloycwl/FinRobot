@@ -14,6 +14,10 @@ FinRobot is a modular algorithmic trading workspace for crypto/FX research, mode
 - LSTM/CNN predictive pipelines converted from notebook-style logic into reusable functions.
 - Fast non-LLM strategy engine skeleton (EMA crossover + transaction cost aware backtest).
 - MetaTrader 5 execution connector with configurable credentials.
+- MT5 auto-trading mode with:
+  - 1-minute execution cycle
+  - 5-minute EMA(5) and EMA(20) trend filter
+  - optional capped martingale lot sizing
 
 ## Project layout
 
@@ -28,9 +32,12 @@ finrobot/
   ml.py
   hft.py
   mt5_executor.py
+  backtesting.py
 
 tests/
   test_indicators.py
+  test_hft.py
+  test_backtesting.py
 
 requirements.txt
 README.md
