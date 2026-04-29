@@ -1,25 +1,27 @@
 # FinRobot
 
-FinRobot is a modular algorithmic trading workspace for crypto/FX research, model experimentation, and optional live execution.
+FinRobot is a **self-improving autonomous algorithmic trading bot with closed opencode feedback loop. For XAUUSD, FX & Crypto.
 
-## What this repo now provides
+## ✅ Implemented Features
 
-- Clean Python package structure (`finrobot/`) with separate modules for data, indicators, ML, strategy, and execution.
-- Numeric command menu for day-to-day operations.
-- Integrated market snapshot pipeline:
-  - OKX candles
-  - CryptoPanic headlines
-  - OKX orderbook depth
-  - Alternative.me fear & greed
-- LSTM/CNN predictive pipelines converted from notebook-style logic into reusable functions.
-- Fast non-LLM strategy engine skeleton (EMA crossover + transaction cost aware backtest).
-- MetaTrader 5 execution connector with configurable credentials.
-- MT5 auto-trading mode with:
-  - 1-minute execution cycle
-  - 5-minute EMA(5) and EMA(20) trend filter
-  - optional capped martingale lot sizing
+- All original core modules: data feeds, indicators, ML models, MT5 execution
+- ✅ **Martingale Trend Strategy** (backtested)
+- ✅ **High Frequency Grid Strategy** (XAUUSD optimized):
+  - 5min chart EMA 5/15 trend direction filter
+  - 1min chart execution, 5 pip grid steps
+  - 1 pip fixed take profit per position
+- ✅ **Autonomous Background Daemon** - runs 24/7 disconnected
+- ✅ **CLOSED SELF-IMPROVEMENT LOOP with OPENCODE**
+  - Automatically runs continuous backtesting
+  - Logs all performance metrics
+  - Automatically calls opencode for improvements
+  - Opencode modifies strategy code directly
+  - Hot reloads changes automatically
+  - Rate limited, safety guarded, validates all changes
 
-## Project layout
+Full daemon system with hot reload, automatic parameter tuning, and self-optimization.
+
+## Project Layout
 
 ```text
 finrobot/
@@ -33,14 +35,19 @@ finrobot/
   hft.py
   mt5_executor.py
   backtesting.py
+  grid.py                  # XAUUSD Grid Trading Strategy
+  opencode_integration.py  # Automatic opencode feedback loop
+  hot_reload.py            # Runtime strategy reloading
 
-tests/
-  test_indicators.py
-  test_hft.py
-  test_backtesting.py
+daemon_service.py          # Background daemon controller
 
-requirements.txt
-README.md
+# Generated runtime files
+daemon.pid
+daemon_state.json
+trading_daemon.log
+feedback_iterations.log
+opencode_feedback.log
+strategy_backups/
 ```
 
 ## Setup
@@ -54,25 +61,44 @@ pip install -r requirements.txt
 ```
 
 2. Configure environment variables:
+Copy `.env.example` to `.env` and fill credentials:
+```
+# MetaTrader 5
+MT5_LOGIN=52606973
+MT5_PASSWORD=ew!6J6gjXOUpd6
+MT5_SERVER=ICMarketsSC-Demo
+MT5_SYMBOL=XAUUSD
+MT5_PIP_VALUE=0.01
 
-```bash
-export CP="your_cryptopanic_token"
-export NV="your_nvidia_key"
-export NVIDIA_MODEL="qwen/qwen3-235b-a22b"
-
-# optional MT5
-export MT5_LOGIN="12345678"
-export MT5_PASSWORD="your_password"
-export MT5_SERVER="Broker-Server"
+# Data providers (optional)
+CP=
+NV=
 ```
 
 ## Run
 
+### Interactive CLI
 ```bash
 python -m finrobot
 ```
+Select actions by number from the interactive menu (includes grid strategy backtest option 6)
 
-You can then select actions by number from the interactive menu.
+### Autonomous Background Daemon
+```bash
+# Start daemon (survives terminal disconnect)
+python3 daemon_service.py start
+
+# Check status anytime
+python3 daemon_service.py status
+
+# Run full parameter sweep
+python3 daemon_service.py sweep
+
+# Stop daemon
+python3 daemon_service.py stop
+```
+
+Daemon runs completely in background. You can safely log out. It will continue trading, backtesting, and calling opencode to automatically improve itself indefinitely.
 
 ## Safety and expectations
 
@@ -83,10 +109,28 @@ You can then select actions by number from the interactive menu.
 
 ## Iteration loop
 
-Use the workflow below for continuous improvement:
+**✅ Correct required workflow (USE THIS EXACT SEQUENCE):**
+```
+code > backtest > submit results > improve code > repeat
+```
 
-1. Backtest strategy
-2. Inspect metrics and failure modes
-3. Adjust signal + risk parameters
-4. Re-test and compare
-5. Only then consider live deployment
+### Current Log Status & Findings (2026-04-28)
+⚠️ **BROKEN LOOP DETECTED**:
+- ✅ Loop IS running (daemon active, executing iterations)
+- ❌ EVERY BACKTEST FAILS WITH CONFIG ERRORS
+- ❌ Parameter names mismatched in all 3 strategies
+- ❌ 100% failed iterations (100/100 logged entries)
+- ❌ Loop is stuck repeating same failures without improvement
+- Root causes:
+  1. GridConfig: invalid `grid_step` parameter name
+  2. HFTConfig: invalid `tick_threshold` parameter name
+  3. BacktestConfig: invalid `ema_fast` parameter name
+  4. Pandas KeyError: 'time' column missing in dataframe
+  5. JSON serialization bug: numpy int64 not serializable
+  6. KeyError when applying best parameters (none exist)
+
+### Required Fixes First:
+1. Fix the config class parameter names to match what the loop is generating
+2. Fix dataframe column name mapping
+3. Add numpy type conversion before JSON logging
+4. Add proper error handling so loop can actually improve instead of repeating failures

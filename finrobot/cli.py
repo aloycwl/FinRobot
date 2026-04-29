@@ -7,7 +7,9 @@ from .data_sources import fetch_fear_greed, fetch_market_depth, fetch_news, fetc
 from .hft import HFTConfig, backtest
 from .indicators import enrich_indicators
 from .llm import llm_prediction
-from .mt5_executor import MT5Credentials, connect, place_market_order, shutdown
+from .mt5_executor import MT5Credentials, connect as mt5_connect, place_market_order as mt5_place_order, shutdown as mt5_shutdown
+from .ctrader_executor import CTraderCredentials, connect as ctrader_connect, place_market_order as ctrader_place_order, shutdown as ctrader_shutdown
+from .grid import GridConfig, backtest_xauusd_grid
 
 
 MENU = {
@@ -16,7 +18,9 @@ MENU = {
     "3": "Train LSTM and predict 10 steps",
     "4": "Train CNN and predict 10 steps",
     "5": "Backtest fast strategy",
-    "6": "Place MT5 live market order",
+    "6": "Backtest XAUUSD Grid Strategy",
+    "7": "Place MT5 live market order",
+    "8": "Place cTrader live market order (Linux native)",
     "0": "Exit",
 }
 
@@ -90,6 +94,13 @@ def option_backtest() -> None:
     print(json.dumps(results, indent=2))
 
 
+def option_backtest_grid() -> None:
+    frame = fetch_okx_candles(limit=2000)
+    results = backtest_xauusd_grid(frame, GridConfig())
+    print("\n=== XAUUSD Grid Strategy Backtest Results ===")
+    print(json.dumps(results, indent=2))
+
+
 def option_mt5_order() -> None:
     login = settings.mt5_login or int(input("MT5 login: "))
     password = settings.mt5_password or input("MT5 password: ")
@@ -98,12 +109,34 @@ def option_mt5_order() -> None:
     side = input("Side (buy/sell): ").strip().lower()
     lot = float(input("Lot size: "))
 
-    mt5 = connect(MT5Credentials(login=login, password=password, server=server))
+    mt5 = mt5_connect(MT5Credentials(login=login, password=password, server=server))
     try:
-        result = place_market_order(mt5, symbol=symbol, side=side, lot=lot)
+        result = mt5_place_order(mt5, symbol=symbol, side=side, lot=lot)
         print(f"Order sent successfully: {result}")
     finally:
-        shutdown(mt5)
+        mt5_shutdown(mt5)
+
+
+def option_ctrader_order() -> None:
+    client_id = settings.ctrader_client_id or input("cTrader Client ID: ")
+    client_secret = settings.ctrader_client_secret or input("cTrader Client Secret: ")
+    access_token = settings.ctrader_access_token or input("cTrader Access Token: ")
+    account_id = settings.ctrader_account_id or int(input("cTrader Account ID: "))
+    symbol = input("Symbol (e.g., XAUUSD): ").strip()
+    side = input("Side (buy/sell): ").strip().lower()
+    lot = float(input("Lot size: "))
+
+    ctrader = ctrader_connect(CTraderCredentials(
+        client_id=client_id,
+        client_secret=client_secret,
+        access_token=access_token,
+        account_id=account_id
+    ))
+    try:
+        result = ctrader_place_order(ctrader, symbol=symbol, side=side, lot=lot)
+        print(f"Order sent successfully: {result}")
+    finally:
+        ctrader_shutdown(ctrader)
 
 
 def main() -> None:
@@ -121,7 +154,11 @@ def main() -> None:
         elif choice == "5":
             option_backtest()
         elif choice == "6":
+            option_backtest_grid()
+        elif choice == "7":
             option_mt5_order()
+        elif choice == "8":
+            option_ctrader_order()
         elif choice == "0":
             print("Goodbye")
             break

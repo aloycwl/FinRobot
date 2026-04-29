@@ -3,8 +3,85 @@ from __future__ import annotations
 from datetime import datetime
 import pandas as pd
 import requests
+import logging
 
 from .config import settings
+
+logger = logging.getLogger("data_sources")
+
+try:
+    import MetaTrader5 as mt5
+    MT5_AVAILABLE = True
+except ImportError:
+    MT5_AVAILABLE = False
+    logger.info("MetaTrader5 not available, using OKX as primary data source")
+
+
+def fetch_mt5_candles(limit: int = 1000) -> pd.DataFrame:
+    """Fetch historical OHLC candles from MetaTrader 5 for XAUUSD"""
+    if not MT5_AVAILABLE:
+        return fetch_okx_candles(limit)
+    if not mt5.initialize():
+        logger.error(f"MT5 initialize failed: {mt5.last_error()}")
+        return fetch_okx_candles(limit)
+        
+    # Login with configured credentials
+    login_ok = mt5.login(
+        login=settings.mt5_login,
+        password=settings.mt5_password,
+        server=settings.mt5_server
+    )
+    
+    if not login_ok:
+        logger.error(f"MT5 login failed: {mt5.last_error()}")
+        mt5.shutdown()
+        return fetch_okx_candles(limit)
+    
+    # Fetch 1 minute candles
+    rates = mt5.copy_rates_from_pos(settings.mt5_symbol, mt5.TIMEFRAME_M1, 0, limit)
+    mt5.shutdown()
+    
+    if rates is None:
+        logger.error(f"Failed to fetch MT5 rates: {mt5.last_error()}")
+        return fetch_okx_candles(limit)
+        
+    df = pd.DataFrame(rates)
+    df['date'] = pd.to_datetime(df['time'], unit='s', utc=True)
+    df = df.set_index('date')
+    
+    # Normalize column names to match OKX format
+    df.rename(columns={'tick_volume': 'volume'}, inplace=True)
+    
+    # Return same format as OKX
+    return df[["open", "high", "low", "close", "volume"]].sort_index()
+
+
+from .historical_cache import cache
+
+def fetch_candles(limit: int = 1000) -> pd.DataFrame:
+    """Universal candle fetcher with cache"""
+    symbol = settings.mt5_symbol
+    
+    # First try cache
+    cached = cache.get_candles(symbol, limit)
+    if cached is not None and len(cached) >= limit * 0.9:
+        logger.debug(f"Returning {len(cached)} cached candles")
+        return cached
+    
+    # Fetch fresh data
+    df = None
+    if MT5_AVAILABLE and settings.mt5_login and settings.mt5_password:
+        df = fetch_mt5_candles(limit)
+    
+    if df is None:
+        df = fetch_okx_candles(limit)
+    
+    # Cache the result
+    if df is not None and len(df) > 0:
+        cache.insert_candles(df, symbol)
+        logger.info(f"Cached {len(df)} new candles, total now: {cache.count_candles(symbol)}")
+    
+    return df
 
 
 def fetch_okx_candles(limit: int = 600) -> pd.DataFrame:

@@ -10,4 +10,5 @@ pyharmonics
 openai
 yfinance
 MetaTrader5
+ctrader-open-api
 pytest
