@@ -211,3 +211,28 @@ You'll see one clean line per cycle:
 **Daemon Status**: Running  
 **Best Strategy**: Martingale (Return: -0.99%, Win Rate: 19.9%)  
 **Current Optimization**: Reducing log verbosity, focusing on actionable metrics
+
+---
+
+## 📚 Important Documents
+
+- **[IMPROVEMENTS_SUMMARY.md](IMPROVEMENTS_SUMMARY.md)** - Complete improvement summary with performance metrics
+- **[AGENTS.md](AGENTS.md)** - This file: Agent documentation and project structure
+- **[rotate_logs.sh](rotate_logs.sh)** - Log rotation script
+
+---
+
+**Quick Commands:**
+```bash
+# Start daemon
+python daemon_service.py start
+
+# Check status
+python daemon_service.py status
+
+# Watch logs
+tail -f trading_daemon.log
+
+# Stop daemon
+python daemon_service.py stop
+```

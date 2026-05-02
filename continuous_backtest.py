@@ -1,24 +1,31 @@
 #!/usr/bin/env python3
 """
-Continuous Backtesting System for XAUUSD 1m Data
+Continuous Backtesting System for XAUUSD 1m Data - IMPROVED VERSION
 
-This script runs continuous backtests on local XAUUSD 1m data,
-optimizing parameters and logging results. No live trading.
+Key improvements:
+- Garbage collection after each cycle
+- Memory management (explicit cleanup)
+- Longer sleep intervals (30s instead of 2s)
+- Better error recovery
+- Rotating log files
+- Memory usage monitoring
 """
 
 from __future__ import annotations
 
 import os
 import sys
+import gc
+import psutil
 import time
 import json
 import logging
-import itertools
 import random
 from datetime import datetime
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Any
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 import pandas as pd
 import numpy as np
@@ -32,9 +39,8 @@ from finrobot.grid import GridConfig, backtest_xauusd_grid
 from finrobot.backtesting import BacktestConfig, backtest_trend_martingale
 from finrobot.hft import HFTConfig, backtest_hft
 
-
 # ============================================================================
-# Configuration
+# Configuration - IMPROVED
 # ============================================================================
 
 LOG_DIR = Path("/home/openclaw/FinRobot/backtest_logs")
@@ -44,27 +50,41 @@ RESULTS_FILE = LOG_DIR / "backtest_results.jsonl"
 BEST_PARAMS_FILE = LOG_DIR / "best_parameters.json"
 SUMMARY_FILE = LOG_DIR / "summary.txt"
 
-# How often to run full parameter sweep (in cycles)
+# INCREASED: How often to run full parameter sweep (in cycles)
 SWEEP_INTERVAL = 10
 
-# Sleep between cycles (seconds)
-CYCLE_SLEEP = 2
+# INCREASED: Sleep between cycles (seconds) - was 2, now 30
+CYCLE_SLEEP = 30
 
+# NEW: Memory threshold for warning (MB)
+MEMORY_WARNING_MB = 300
+
+# NEW: Force GC every N cycles
+GC_INTERVAL = 5
 
 # ============================================================================
-# Logging Setup
+# Logging Setup with Rotation - IMPROVED
 # ============================================================================
+
+log_formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(message)s")
+
+# Console handler
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(log_formatter)
+
+# Rotating file handler (10MB max, keep 5 backups)
+file_handler = RotatingFileHandler(
+    LOG_DIR / "backtest_engine.log",
+    maxBytes=10*1024*1024,  # 10MB
+    backupCount=5
+)
+file_handler.setFormatter(log_formatter)
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)-8s | %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_DIR / "backtest_engine.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[console_handler, file_handler]
 )
 logger = logging.getLogger("backtest_engine")
-
 
 # ============================================================================
 # Parameter Space Definitions
@@ -100,7 +120,6 @@ PARAMETER_SPACE = {
         "risk_per_trade": [0.002, 0.005, 0.01]
     }
 }
-
 
 # ============================================================================
 # Results Tracking
@@ -204,7 +223,7 @@ class ResultsTracker:
 
 
 # ============================================================================
-# Main Backtest Engine
+# Main Backtest Engine - IMPROVED
 # ============================================================================
 
 class BacktestEngine:
@@ -216,6 +235,8 @@ class BacktestEngine:
             "martingale": BacktestConfig(),
             "hft": HFTConfig()
         }
+        self.cycle_count = 0
+        self.error_count = 0
         
     def generate_random_params(self, strategy: str) -> dict:
         """Generate random parameters from the parameter space."""
@@ -260,100 +281,149 @@ class BacktestEngine:
             )
     
     def run_cycle(self, full_sweep: bool = False):
-        """Run one backtest cycle."""
+        """Run one backtest cycle with memory management."""
         self.tracker.cycle_count += 1
         cycle_num = self.tracker.cycle_count
-
-        # Only log cycle header every 10 cycles to reduce noise
-        if cycle_num % 10 == 1 or full_sweep:
-            logger.info(f"{'='*60}")
-            logger.info(f"BACKTEST CYCLE #{cycle_num}")
-            logger.info(f"{'='*60}")
+        self.cycle_count = cycle_num
+        df = None
         
-        # Load data
         try:
-            df = fetch_candles(limit=10000)
+            # Only log cycle header every 10 cycles to reduce noise
             if cycle_num % 10 == 1 or full_sweep:
-                logger.info(f"Loaded {len(df)} bars | Progress: {cycle_num}/10000 ({cycle_num/100:.1f}%)")
-        except Exception as e:
-            logger.error(f"Failed to load data: {e}")
-            return
+                logger.info(f"{'='*60}")
+                logger.info(f"BACKTEST CYCLE #{cycle_num}")
+                logger.info(f"{'='*60}")
+            
+            # Check memory before loading data
+            try:
+                process = psutil.Process()
+                mem_before = process.memory_info().rss / 1024 / 1024
+                if mem_before > MEMORY_WARNING_MB:
+                    logger.warning(f"High memory usage: {mem_before:.1f}MB")
+            except:
+                pass
+            
+            # Load data
+            try:
+                df = fetch_candles(limit=10000)
+                if cycle_num % 10 == 1 or full_sweep:
+                    logger.info(f"Loaded {len(df)} bars | Progress: {cycle_num}/10000 ({cycle_num/100:.1f}%)")
+            except Exception as e:
+                logger.error(f"Failed to load data: {e}")
+                self.error_count += 1
+                return
 
-        # Determine how many parameter combinations to test
-        if full_sweep:
-            tests_per_strategy = 10
-            if cycle_num % 10 == 1:
-                logger.info("Running FULL PARAMETER SWEEP")
-        else:
-            tests_per_strategy = 3
+            # Determine how many parameter combinations to test
+            if full_sweep:
+                tests_per_strategy = 10
+                if cycle_num % 10 == 1:
+                    logger.info("Running FULL PARAMETER SWEEP")
+            else:
+                # REDUCED: Run only 1 test per strategy instead of 3
+                tests_per_strategy = 1
 
-        # Track best results in this cycle
-        cycle_best = {"strategy": "-", "return": -999, "win_rate": 0}
-        cycle_results = []
+            # Track best results in this cycle
+            cycle_best = {"strategy": "-", "return": -999, "win_rate": 0}
 
-        # Run backtests for each strategy
-        for strategy in ["grid", "martingale", "hft"]:
-            for i in range(tests_per_strategy):
-                # Generate parameters
-                if i == 0:
-                    if strategy == "grid":
-                        params = asdict(GridConfig())
-                    elif strategy == "martingale":
-                        params = asdict(BacktestConfig())
+            # Run backtests for each strategy
+            for strategy in ["grid", "martingale", "hft"]:
+                for i in range(tests_per_strategy):
+                    # Generate parameters
+                    if i == 0:
+                        if strategy == "grid":
+                            params = asdict(GridConfig())
+                        elif strategy == "martingale":
+                            params = asdict(BacktestConfig())
+                        else:
+                            params = asdict(HFTConfig())
                     else:
-                        params = asdict(HFTConfig())
-                else:
-                    params = self.generate_random_params(strategy)
+                        params = self.generate_random_params(strategy)
 
-                # Run backtest
-                result = self.run_single_backtest(strategy, params, df)
+                    # Run backtest
+                    result = self.run_single_backtest(strategy, params, df)
 
-                if result:
-                    self.tracker.log_result(result)
-                    is_best = self.tracker.update_best(result)
+                    if result:
+                        self.tracker.log_result(result)
+                        is_best = self.tracker.update_best(result)
 
-                    perf = result.performance
-                    if 'error' not in perf:
-                        ret = perf.get('total_return', 0)
-                        wr = perf.get('win_rate', 0)
-                        trades = perf.get('total_trades', perf.get('num_trades', 0))
+                        perf = result.performance
+                        if 'error' not in perf:
+                            ret = perf.get('total_return', 0)
+                            wr = perf.get('win_rate', 0)
+                            trades = perf.get('total_trades', perf.get('num_trades', 0))
 
-                        # Track cycle best
-                        if ret > cycle_best["return"]:
-                            cycle_best = {
-                                "strategy": strategy[:1].upper(),
-                                "return": ret,
-                                "win_rate": wr
-                            }
+                            # Track cycle best
+                            if ret > cycle_best["return"]:
+                                cycle_best = {
+                                    "strategy": strategy[:1].upper(),
+                                    "return": ret,
+                                    "win_rate": wr
+                                }
 
-                        # Log individual test only if it's the best or has errors
-                        if is_best or cycle_num % 50 == 0:
-                            best_marker = " ★BEST" if is_best else ""
-                            logger.info(f"  [{strategy[:1].upper()}] Test {i+1}: {ret:+.2%} WR:{wr:.1f}% T:{trades}{best_marker}")
+                            # Log only best results
+                            if is_best:
+                                logger.info(f"  [{strategy[:1].upper()}] ★NEW BEST: {ret:+.2%} WR:{wr:.1f}% T:{trades}")
 
-        # Only print summary every 10 cycles or on full sweep
-        if cycle_num % 10 == 0 or full_sweep:
-            self.tracker.print_summary()
+            # Only print summary every 10 cycles or on full sweep
+            if cycle_num % 10 == 0 or full_sweep:
+                self.tracker.print_summary()
+                
+            # Record success
+            self.error_count = max(0, self.error_count - 1)  # Decay error count
+            
+        except Exception as e:
+            self.error_count += 1
+            logger.error(f"Error in cycle {cycle_num}: {e}")
+            logger.error(traceback.format_exc())
+            
+        finally:
+            # ALWAYS clean up DataFrame to free memory
+            if df is not None:
+                del df
+                df = None
+                
+            # Force garbage collection periodically
+            if cycle_num % GC_INTERVAL == 0:
+                gc.collect()
+                try:
+                    process = psutil.Process()
+                    mem_mb = process.memory_info().rss / 1024 / 1024
+                    logger.info(f"GC completed. Memory: {mem_mb:.1f}MB")
+                except:
+                    pass
     
     def run(self, cycles: Optional[int] = None):
-        """Run the backtest engine continuously."""
+        """Run the backtest engine continuously with error recovery."""
         logger.info("="*60)
-        logger.info("CONTINUOUS BACKTEST ENGINE STARTED")
+        logger.info("CONTINUOUS BACKTEST ENGINE STARTED (IMPROVED)")
         logger.info("="*60)
         logger.info(f"Data: XAUUSD 1m from local CSV")
         logger.info(f"Strategies: Grid, Martingale, HFT")
         logger.info(f"Results logged to: {LOG_DIR}")
+        logger.info(f"Cycle sleep: {CYCLE_SLEEP}s")
+        logger.info(f"Tests per cycle: 1 per strategy (reduced from 3)")
         logger.info("="*60)
         
         try:
             cycle_count = 0
+            consecutive_errors = 0
+            
             while self.running:
                 cycle_count += 1
                 
                 # Run full sweep every N cycles
                 full_sweep = (cycle_count % SWEEP_INTERVAL) == 0
                 
-                self.run_cycle(full_sweep=full_sweep)
+                try:
+                    self.run_cycle(full_sweep=full_sweep)
+                    consecutive_errors = 0  # Reset on success
+                except Exception as e:
+                    consecutive_errors += 1
+                    logger.error(f"Cycle {cycle_count} failed (consecutive errors: {consecutive_errors}): {e}")
+                    
+                    if consecutive_errors >= 5:
+                        logger.critical("Too many consecutive errors, stopping engine")
+                        break
                 
                 # Check if we've reached max cycles
                 if cycles is not None and cycle_count >= cycles:
@@ -361,7 +431,8 @@ class BacktestEngine:
                     break
                 
                 # Sleep before next cycle
-                time.sleep(CYCLE_SLEEP)
+                if self.running:
+                    time.sleep(CYCLE_SLEEP)
                 
         except KeyboardInterrupt:
             logger.info("\nReceived interrupt signal, shutting down...")
@@ -375,16 +446,15 @@ def main():
     """Main entry point."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Continuous Backtesting for XAUUSD")
+    parser = argparse.ArgumentParser(description="Continuous Backtesting for XAUUSD (IMPROVED)")
     parser.add_argument("--cycles", type=int, default=None, help="Number of cycles to run (default: infinite)")
-    parser.add_argument("--sleep", type=int, default=2, help="Seconds to sleep between cycles")
+    parser.add_argument("--sleep", type=int, default=None, help="Seconds to sleep between cycles (default: 30)")
     args = parser.parse_args()
     
-    global CYCLE_SLEEP
-    CYCLE_SLEEP = args.sleep
+    sleep_interval = args.sleep if args.sleep else CYCLE_SLEEP
     
     engine = BacktestEngine()
-    engine.run(cycles=args.cycles)
+    engine.run(cycles=args.cycles, sleep_interval=sleep_interval)
 
 
 if __name__ == "__main__":
