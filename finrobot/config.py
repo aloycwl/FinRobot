@@ -10,7 +10,7 @@ load_dotenv()
 @dataclass
 class Settings:
     okx_symbol: str = os.getenv("OKX_SYMBOL", "BTC-USDT")
-    okx_bar: str = os.getenv("OKX_BAR", "5m")
+    okx_bar: str = os.getenv("OKX_BAR", "1m")
     cryptopanic_token: str | None = os.getenv("CP")
     nvidia_key: str | None = os.getenv("NV")
     nvidia_model: str = os.getenv("NVIDIA_MODEL", "qwen/qwen3-235b-a22b")

@@ -11,6 +11,10 @@ class HFTConfig:
     volume_filter: int = 25
     latency_ms: int = 100
     spread_limit: float = 0.02
+    fast_window: int = 5
+    slow_window: int = 20
+    fee_bps: float = 3.0
+    risk_per_trade: float = 0.005
 
 
 def backtest_hft(df: pd.DataFrame, cfg: HFTConfig) -> dict:
@@ -18,7 +22,9 @@ def backtest_hft(df: pd.DataFrame, cfg: HFTConfig) -> dict:
     df = df.copy().sort_values("time").reset_index(drop=True)
 
     df["price_change"] = df["close"].pct_change().fillna(0.0)
-    df["volume_change"] = df["tick_volume"].pct_change().fillna(0.0)
+    # Handle missing tick_volume column fallback to regular volume
+    volume_col = "tick_volume" if "tick_volume" in df.columns else "volume"
+    df["volume_change"] = df[volume_col].pct_change().fillna(0.0)
 
     position = 0
     pnl = []
@@ -71,17 +77,6 @@ def backtest_hft(df: pd.DataFrame, cfg: HFTConfig) -> dict:
         "win_rate": win_rate,
         "num_trades": len(trades)
     }
-
-from dataclasses import dataclass
-import pandas as pd
-
-
-@dataclass
-class HFTConfig:
-    fast_window: int = 5
-    slow_window: int = 20
-    fee_bps: float = 3.0
-    risk_per_trade: float = 0.005
 
 
 def generate_signals(frame: pd.DataFrame, cfg: HFTConfig) -> pd.DataFrame:

@@ -86,3 +86,9 @@ class StrategyHotReloader:
         if success:
             logger.info("All strategies reloaded successfully")
         return success
+
+
+def reload_all_modules() -> bool:
+    """Public entry point to reload all strategy modules (imported from feedback_loop)"""
+    reloader = StrategyHotReloader()
+    return reloader.reload_strategies()

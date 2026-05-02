@@ -1,5 +1,58 @@
 {
-  "iteration": 2,
-  "best_parameters": {},
+  "iteration": 381,
+  "best_parameters": {
+    "martingale": {
+      "parameters": {
+        "multiplier": 1.25,
+        "base_lot": 0.005,
+        "max_steps": 2,
+        "ema_fast": 8,
+        "ema_slow": 34
+      },
+      "performance": {
+        "bars": 10000,
+        "total_return": -0.00988385509723344,
+        "max_drawdown": -0.009883757526447323,
+        "win_rate": 0.19989513697732336,
+        "num_trades": 7629
+      },
+      "updated_at": "2026-05-01T13:33:28.972613"
+    },
+    "grid": {
+      "parameters": {
+        "grid_step_pips": 1.0,
+        "take_profit_pips": 3.0,
+        "trend_ema_fast": 21,
+        "trend_ema_slow": 21,
+        "max_grid_levels": 2,
+        "base_lot": 0.02
+      },
+      "performance": {
+        "bars": 10000,
+        "total_return": 0.0,
+        "max_drawdown": 0.0,
+        "win_rate": 0.0,
+        "total_trades": 0,
+        "win_trades": 0,
+        "grid_levels_used_max": 2
+      },
+      "updated_at": "2026-05-01T12:22:47.780863"
+    },
+    "hft": {
+      "parameters": {
+        "tick_threshold": 0.08,
+        "volume_filter": 10,
+        "latency_ms": 50,
+        "spread_limit": 0.01
+      },
+      "performance": {
+        "total_return": 0.0,
+        "max_drawdown": 0.0,
+        "win_rate": 0.0,
+        "num_trades": 0
+      },
+      "updated_at": "2026-05-01T13:45:46.343334"
+    }
+  },
   "last_sweep": null
 }

@@ -10,6 +10,8 @@ class BacktestConfig:
     multiplier: float = 2.0
     max_steps: int = 4
     fee_bps: float = 2.0
+    ema_fast: int = 5
+    ema_slow: int = 20
 
 
 def build_trend_signals_from_m1(m1: pd.DataFrame) -> pd.DataFrame:
@@ -17,15 +19,29 @@ def build_trend_signals_from_m1(m1: pd.DataFrame) -> pd.DataFrame:
 
     m1 must contain columns: time, open, high, low, close, tick_volume
     """
-    df = m1.copy().sort_values("time").reset_index(drop=True)
+    df = m1.copy()
+    
+    # Handle index being datetime
+    if isinstance(df.index, pd.DatetimeIndex):
+        df = df.reset_index(names="time")
+    
+    # Handle both 'date' and 'time' columns
+    if "date" in df.columns and "time" not in df.columns:
+        df = df.rename(columns={"date": "time"})
+        
+    df = df.sort_values("time").reset_index(drop=True)
     df["time"] = pd.to_datetime(df["time"], utc=True)
 
+    # Handle both tick_volume and volume column names
+    volume_col = "tick_volume" if "tick_volume" in df.columns else "volume"
+    
     m5 = (
         df.set_index("time")
         .resample("5min")
-        .agg({"open": "first", "high": "max", "low": "min", "close": "last", "tick_volume": "sum"})
+        .agg({"open": "first", "high": "max", "low": "min", "close": "last", volume_col: "sum"})
         .dropna()
     )
+    m5.rename(columns={volume_col: "tick_volume"}, inplace=True)
     m5["ema5"] = m5["close"].ewm(span=5).mean()
     m5["ema20"] = m5["close"].ewm(span=20).mean()
 

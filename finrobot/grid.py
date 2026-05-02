@@ -11,9 +11,12 @@ class GridConfig:
     trend_ema_fast: int = 5
     trend_ema_slow: int = 15
     trend_timeframe: str = "5min"
+    ema_fast: int = 5
+    ema_slow: int = 15
     
     # Grid execution settings (1min chart)
     grid_step_pips: float = 5.0
+    grid_step: float = 5.0
     take_profit_pips: float = 1.0
     max_grid_levels: int = 6
     base_lot: float = 0.01
@@ -23,11 +26,15 @@ class GridConfig:
 
 def calculate_trend_direction(df_m1: pd.DataFrame, cfg: GridConfig) -> pd.DataFrame:
     """Calculate overall trend direction using 5min EMA 5/15 crossover"""
-    df = df_m1.copy().reset_index().rename(columns={"date": "time"})
+    df = df_m1.copy().reset_index()
+    
+    # Handle both 'date' and 'time' columns
+    if "date" in df.columns and "time" not in df.columns:
+        df = df.rename(columns={"date": "time"})
+    if "time" in df.columns and "date" not in df.columns:
+        df["date"] = df["time"]
+        
     df["time"] = pd.to_datetime(df["time"], utc=True)
-
-    # Also add alias for backwards compatibility
-    df["date"] = df["time"]
     
     # Resample to 5 minute timeframe for trend filter
     df_5m = (
@@ -142,7 +149,7 @@ def backtest_xauusd_grid(df_m1: pd.DataFrame, cfg: GridConfig) -> dict:
             if ret > 0: wins +=1
     
     equity = pd.Series(strategy_returns).add(1).cumprod()
-    total_return = float(equity.iloc[-1] - 1)
+    total_return = float(equity.iloc[-1] - 1) if len(equity) > 0 else 0.0
     max_drawdown = float((equity / equity.cummax() - 1).min())
     win_rate = wins / trades_count if trades_count > 0 else 0.0
     

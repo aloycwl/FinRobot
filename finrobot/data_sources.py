@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
 import pandas as pd
 import requests
@@ -59,27 +60,47 @@ def fetch_mt5_candles(limit: int = 1000) -> pd.DataFrame:
 from .historical_cache import cache
 
 def fetch_candles(limit: int = 1000) -> pd.DataFrame:
-    """Universal candle fetcher with cache"""
-    symbol = settings.mt5_symbol
+    """Universal candle fetcher with cache - prioritizes local historical data"""
+    symbol = settings.okx_symbol
     
-    # First try cache
+    # FIRST: Load from local CSV data (always use this first for backtesting)
+    csv_path = "/home/openclaw/FinRobot/data/XAUUSD1.csv"
+    if os.path.exists(csv_path):
+        df = pd.read_csv(
+            csv_path,
+            sep="\t",
+            header=None,
+            names=["time", "open", "high", "low", "close", "volume"],
+            parse_dates=["time"]
+        )
+        df = df.set_index("time")
+        df = df.sort_index().tail(limit)
+        logger.info(f"Loaded {len(df)} bars from local historical data")
+        return df
+    
+    # Then try cache
     cached = cache.get_candles(symbol, limit)
     if cached is not None and len(cached) >= limit * 0.9:
         logger.debug(f"Returning {len(cached)} cached candles")
         return cached
     
-    # Fetch fresh data
+    # Fetch fresh data only if local data not available
     df = None
     if MT5_AVAILABLE and settings.mt5_login and settings.mt5_password:
         df = fetch_mt5_candles(limit)
     
-    if df is None:
+    if df is None or len(df) == 0:
         df = fetch_okx_candles(limit)
     
     # Cache the result
     if df is not None and len(df) > 0:
         cache.insert_candles(df, symbol)
         logger.info(f"Cached {len(df)} new candles, total now: {cache.count_candles(symbol)}")
+    
+    # Always return at least an empty dataframe with correct columns
+    if df is None or len(df) == 0:
+        logger.warning(f"Returning empty dataframe for {symbol}")
+        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
     
     return df
 

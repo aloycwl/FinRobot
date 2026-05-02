@@ -10,7 +10,7 @@ from typing import Optional
 from dataclasses import dataclass
 
 from finrobot.config import settings
-from finrobot.data_sources import fetch_okx_candles
+from finrobot.data_sources import fetch_okx_candles, fetch_candles
 from finrobot.grid import GridConfig, backtest_xauusd_grid, calculate_trend_direction
 from finrobot.feedback_loop import AutonomousFeedbackLoop
 
@@ -82,31 +82,35 @@ class TradingDaemon:
             while self.state.running:
                 self.run_cycle()
                 self.save_state()
-                time.sleep(self.check_interval)
+                # No sleep - continuous backtesting loop
         except KeyboardInterrupt:
             logger.info("Received interrupt signal")
         finally:
             self.stop()
 
     def run_cycle(self):
-        self.state.last_check = datetime.utcnow()
-        logger.info("Running market check cycle")
-
         try:
-            # Fetch latest 1min candles
-            df = fetch_okx_candles(limit=500)
-            self.state.current_price = float(df.iloc[-1]["close"])
+            df = fetch_candles(limit=10000)
+            self.state.last_check = datetime.utcnow()
+            
+            if len(df) > 0:
+                self.state.current_price = float(df.iloc[-1]["close"])
 
-            # Calculate trend direction
-            df_with_trend = calculate_trend_direction(df, self.grid_config)
-            self.state.trend = int(df_with_trend.iloc[-1]["trend"])
+                # Calculate trend direction
+                df_with_trend = calculate_trend_direction(df, self.grid_config)
+                self.state.trend = int(df_with_trend.iloc[-1]["trend"])
 
-            trend_str = "BULLISH" if self.state.trend == 1 else "BEARISH" if self.state.trend == -1 else "NEUTRAL"
-            logger.info(f"Current price: {self.state.current_price:.2f} | Trend: {trend_str}")
+                trend_str = "BULLISH" if self.state.trend == 1 else "BEARISH" if self.state.trend == -1 else "NEUTRAL"
+                logger.info(f"Current price: {self.state.current_price:.2f} | Trend: {trend_str}")
 
-            # Run rolling backtest validation
-            bt_result = backtest_xauusd_grid(df.tail(1000), self.grid_config)
-            logger.info(f"Last 1000 bars stats: Win rate {bt_result['win_rate']:.1%}, Total return {bt_result['total_return']:.2%}")
+                # Run full backtest with 10000 bars minimum
+                bt_result = backtest_xauusd_grid(df, self.grid_config)
+                logger.info(f"Last 10000 bars stats: Win rate {bt_result['win_rate']:.1%}, Total return {bt_result['total_return']:.2%}")
+                
+                # Autonomous feedback loop: update parameters based on results
+                self.feedback_loop.evaluate_and_update(bt_result, self.grid_config)
+            else:
+                logger.warning("No market data available, skipping price update")
 
         except Exception as e:
             logger.error(f"Error in cycle: {str(e)}", exc_info=True)

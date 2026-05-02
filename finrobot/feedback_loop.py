@@ -93,23 +93,41 @@ class AutonomousFeedbackLoop:
                 logger.error(f"Failed to load state: {e}")
 
     def save_state(self):
+        def json_default(obj):
+            if isinstance(obj, (np.integer, np.int64, np.int32)):
+                return int(obj)
+            if isinstance(obj, (np.floating, np.float64, np.float32)):
+                return float(obj)
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+            
         with open(self.state_file, "w") as f:
             json.dump({
                 "iteration": self.state.iteration,
                 "best_parameters": self.state.best_parameters,
                 "last_sweep": self.state.last_sweep.isoformat() if self.state.last_sweep else None
-            }, f, indent=2)
+            }, f, indent=2, default=json_default)
 
     def log_iteration(self, parameter_set: ParameterSet):
+        def json_default(obj):
+            if isinstance(obj, (np.integer, np.int64, np.int32)):
+                return int(obj)
+            if isinstance(obj, (np.floating, np.float64, np.float32)):
+                return float(obj)
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+            
         log_entry = {
             "timestamp": datetime.utcnow().isoformat(),
             "strategy": parameter_set.strategy,
-            "parameters": {k: int(v) if isinstance(v, (np.integer, np.int64)) else float(v) if isinstance(v, (np.floating, np.float64)) else v for k, v in parameter_set.parameters.items()},
+            "parameters": parameter_set.parameters,
             "performance": parameter_set.performance,
             "is_best": parameter_set.is_best
         }
         with open(self.log_file, "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
+            f.write(json.dumps(log_entry, default=json_default) + "\n")
 
     def generate_parameter_combinations(self, strategy: str) -> Iterator[Dict[str, Any]]:
         space = self.parameter_space[strategy]
@@ -171,7 +189,7 @@ class AutonomousFeedbackLoop:
 
     def run_parameter_sweep(self):
         logger.info("Starting full parameter sweep across all strategies")
-        df = fetch_candles(limit=2000)
+        df = fetch_candles(limit=10000)
 
         for strategy in ["grid", "martingale", "hft"]:
             logger.info(f"Running parameter sweep for {strategy}")
@@ -202,8 +220,8 @@ class AutonomousFeedbackLoop:
                 self.state.iteration += 1
                 logger.info(f"Starting optimization iteration #{self.state.iteration}")
 
-                # Fetch fresh market data
-                df = fetch_candles(limit=1000)
+                # Fetch fresh market data - 10000 bars minimum for accuracy
+                df = fetch_candles(limit=10000)
 
                 # Test current best parameters first
                 for strategy in ["grid", "martingale", "hft"]:
@@ -282,8 +300,8 @@ class AutonomousFeedbackLoop:
                         logger.error("❌ Opencode failed to run")
                         self.consecutive_failures += 1
 
-                # Sleep 5 minutes between optimization runs
-                time.sleep(300)
+                # No sleep - continuous optimization loop
+                pass
 
             except Exception as e:
                 logger.error(f"Error in optimization loop: {str(e)}", exc_info=True)
@@ -294,6 +312,30 @@ class AutonomousFeedbackLoop:
         self.thread = threading.Thread(target=self.run_continuous_optimization, daemon=True)
         self.thread.start()
         logger.info("Autonomous feedback loop started")
+
+    def evaluate_and_update(self, backtest_result, current_config):
+        """
+        Called by daemon after each backtest run in main loop.
+        Updates best parameters and tracks performance from daemon cycle results.
+        """
+        with self.lock:
+            try:
+                param_set = ParameterSet(
+                    strategy="grid",
+                    parameters=asdict(current_config),
+                    performance=backtest_result,
+                    tested_at=datetime.utcnow()
+                )
+                
+                self.update_best_parameters(param_set)
+                self.log_iteration(param_set)
+                
+                self.consecutive_failures = 0
+                logger.debug(f"Received daemon backtest result: {backtest_result.get('total_return', 0):.2%}")
+                
+            except Exception as e:
+                logger.error(f"Failed to process evaluate_and_update: {str(e)}")
+                self.consecutive_failures += 1
 
     def stop(self):
         self.state.running = False

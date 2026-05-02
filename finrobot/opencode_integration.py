@@ -5,8 +5,20 @@ import json
 import time
 import subprocess
 import logging
+import numpy as np
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
+
+
+class NumpyJsonEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumpyJsonEncoder, self).default(obj)
 
 logger = logging.getLogger("opencode_feedback")
 
@@ -32,7 +44,7 @@ class OpencodeFeedbackLoop:
 Time: {datetime.utcnow().isoformat()}
 
 CURRENT PERFORMANCE METRICS:
-{json.dumps(metrics, indent=2)}
+{json.dumps(metrics, indent=2, cls=NumpyJsonEncoder)}
 
 LAST 50 BACKTEST LOG ENTRIES:
 {logs[-3000:]}
