@@ -18,7 +18,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
     handlers=[
-        logging.FileHandler("/home/openclaw/FinRobot/trading_daemon.log"),
+        logging.FileHandler("./trading_daemon.log"),
         logging.StreamHandler()
     ]
 )
@@ -41,8 +41,8 @@ class TradingDaemon:
         self.check_interval = check_interval
         self.state = DaemonState()
         self.grid_config = GridConfig()
-        self.state_file = "/home/openclaw/FinRobot/daemon_state.json"
-        self.pid_file = "/home/openclaw/FinRobot/daemon.pid"
+        self.state_file = "./daemon_state.json"
+        self.pid_file = "./daemon.pid"
         self.feedback_loop = AutonomousFeedbackLoop(self)
 
     def start(self):
@@ -71,11 +71,18 @@ class TradingDaemon:
         logger.info("Trading daemon stopped")
 
     def save_state(self):
+        import numpy as np
+        def json_default(obj):
+            if isinstance(obj, (np.integer, np.int64, np.int32)):
+                return int(obj)
+            if isinstance(obj, (np.floating, np.float64, np.float32)):
+                return float(obj)
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
         with open(self.state_file, "w") as f:
             json.dump({
                 **self.state.__dict__,
                 "last_check": self.state.last_check.isoformat() if self.state.last_check else None
-            }, f, indent=2)
+            }, f, indent=2, default=json_default)
 
     def run_loop(self):
         try:
@@ -117,8 +124,8 @@ class TradingDaemon:
 
 
 def print_status():
-    state_file = "/home/openclaw/FinRobot/daemon_state.json"
-    pid_file = "/home/openclaw/FinRobot/daemon.pid"
+    state_file = "./daemon_state.json"
+    pid_file = "./daemon.pid"
 
     print("\n=== Trading Daemon Status ===")
     if os.path.exists(pid_file):
@@ -138,11 +145,11 @@ def print_status():
             print(f"PnL: {state.get('pnl', 0):.4f}")
 
     print("\nLog files:")
-    print("  Trading daemon: /home/openclaw/FinRobot/trading_daemon.log")
-    print("  Feedback loop:  /home/openclaw/FinRobot/feedback_iterations.log")
+    print("  Trading daemon: ./trading_daemon.log")
+    print("  Feedback loop:  ./feedback_iterations.log")
 
     # Show best parameters
-    state_file = "/home/openclaw/FinRobot/feedback_loop_state.json"
+    state_file = "./feedback_loop_state.json"
     if os.path.exists(state_file):
         print("\n=== Best Performing Parameters ===")
         with open(state_file) as f:

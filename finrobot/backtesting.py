@@ -14,7 +14,7 @@ class BacktestConfig:
     ema_slow: int = 20
 
 
-def build_trend_signals_from_m1(m1: pd.DataFrame) -> pd.DataFrame:
+def build_trend_signals_from_m1(m1: pd.DataFrame, cfg: BacktestConfig) -> pd.DataFrame:
     """Build 1m trade signals using 5m EMA(5/20) trend filter.
 
     m1 must contain columns: time, open, high, low, close, tick_volume
@@ -42,20 +42,20 @@ def build_trend_signals_from_m1(m1: pd.DataFrame) -> pd.DataFrame:
         .dropna()
     )
     m5.rename(columns={volume_col: "tick_volume"}, inplace=True)
-    m5["ema5"] = m5["close"].ewm(span=5).mean()
-    m5["ema20"] = m5["close"].ewm(span=20).mean()
+    m5["ema_fast"] = m5["close"].ewm(span=cfg.ema_fast).mean()
+    m5["ema_slow"] = m5["close"].ewm(span=cfg.ema_slow).mean()
 
-    merged = df.merge(m5[["ema5", "ema20"]], left_on=df["time"].dt.floor("5min"), right_index=True, how="left")
+    merged = df.merge(m5[["ema_fast", "ema_slow"]], left_on=df["time"].dt.floor("5min"), right_index=True, how="left")
     merged = merged.rename(columns={"key_0": "time_5m"})
 
     merged["signal"] = 0
-    merged.loc[(merged["close"] > merged["ema5"]) & (merged["close"] > merged["ema20"]), "signal"] = 1
-    merged.loc[(merged["close"] < merged["ema5"]) & (merged["close"] < merged["ema20"]), "signal"] = -1
+    merged.loc[(merged["close"] > merged["ema_fast"]) & (merged["close"] > merged["ema_slow"]), "signal"] = 1
+    merged.loc[(merged["close"] < merged["ema_fast"]) & (merged["close"] < merged["ema_slow"]), "signal"] = -1
     return merged
 
 
 def backtest_trend_martingale(m1: pd.DataFrame, cfg: BacktestConfig) -> dict:
-    df = build_trend_signals_from_m1(m1)
+    df = build_trend_signals_from_m1(m1, cfg)
     df["ret"] = df["close"].pct_change().fillna(0.0)
 
     position = 0

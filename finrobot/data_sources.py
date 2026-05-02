@@ -64,7 +64,7 @@ def fetch_candles(limit: int = 1000) -> pd.DataFrame:
     symbol = settings.okx_symbol
     
     # FIRST: Load from local CSV data (always use this first for backtesting)
-    csv_path = "/home/openclaw/FinRobot/data/XAUUSD1.csv"
+    csv_path = "./data/XAUUSD1.csv"
     if os.path.exists(csv_path):
         df = pd.read_csv(
             csv_path,

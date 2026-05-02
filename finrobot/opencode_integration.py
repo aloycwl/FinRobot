@@ -28,8 +28,8 @@ class OpencodeFeedbackLoop:
         self.last_call: Optional[datetime] = None
         self.min_interval = timedelta(minutes=75)
         self.opencode_bin = "/home/openclaw/.npm-global/bin/opencode"
-        self.project_root = "/home/openclaw/FinRobot"
-        self.feedback_log = "/home/openclaw/FinRobot/opencode_feedback.log"
+        self.project_root = "."
+        self.feedback_log = "./opencode_feedback.log"
 
     def can_call(self) -> bool:
         """Check rate limit before calling opencode"""

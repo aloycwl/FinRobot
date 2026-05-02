@@ -48,8 +48,8 @@ class AutonomousFeedbackLoop:
     def __init__(self, daemon):
         self.daemon = daemon
         self.state = FeedbackLoopState()
-        self.state_file = "/home/openclaw/FinRobot/feedback_loop_state.json"
-        self.log_file = "/home/openclaw/FinRobot/feedback_iterations.log"
+        self.state_file = "./feedback_loop_state.json"
+        self.log_file = "./feedback_iterations.log"
         self.lock = threading.Lock()
         self.thread: Optional[threading.Thread] = None
         self.opencode = OpencodeFeedbackLoop()
@@ -198,6 +198,7 @@ class AutonomousFeedbackLoop:
 
             for params in self.generate_parameter_combinations(strategy):
                 param_set = self.evaluate_parameter_set(strategy, params, df)
+                self.state.tested_parameters.append(param_set)
                 self.update_best_parameters(param_set)
                 self.log_iteration(param_set)
 
@@ -225,7 +226,7 @@ class AutonomousFeedbackLoop:
 
                 # Test current best parameters first
                 for strategy in ["grid", "martingale", "hft"]:
-                    if strategy in self.state.best_parameters:
+                    if strategy in self.state.best_parameters and "parameters" in self.state.best_parameters[strategy]:
                         best_params = self.state.best_parameters[strategy]["parameters"]
                         param_set = self.evaluate_parameter_set(strategy, best_params, df)
                         self.log_iteration(param_set)
@@ -239,6 +240,7 @@ class AutonomousFeedbackLoop:
                         params[key] = np.random.choice(values)
 
                     param_set = self.evaluate_parameter_set(strategy, params, df)
+                    self.state.tested_parameters.append(param_set)
                     self.update_best_parameters(param_set)
                     self.log_iteration(param_set)
 
@@ -246,7 +248,7 @@ class AutonomousFeedbackLoop:
                 all_met_target = True
                 working_strategies = 0
                 for strategy in ["grid", "martingale", "hft"]:
-                    if strategy in self.state.best_parameters:
+                    if strategy in self.state.best_parameters and "parameters" in self.state.best_parameters[strategy]:
                         working_strategies += 1
                         ret = self.state.best_parameters[strategy]["performance"].get("total_return", 0)
                         if ret < self.state.target_hourly_return:
@@ -267,7 +269,7 @@ class AutonomousFeedbackLoop:
                 self.save_state()
                 
                 # Only update daemon if we actually have working best parameters
-                if "grid" in self.state.best_parameters:
+                if "grid" in self.state.best_parameters and "parameters" in self.state.best_parameters["grid"]:
                     self.daemon.grid_config = GridConfig(**self.state.best_parameters["grid"]["parameters"])
                     logger.info("Updated daemon with latest best parameters")
 
@@ -327,6 +329,7 @@ class AutonomousFeedbackLoop:
                     tested_at=datetime.utcnow()
                 )
                 
+                self.state.tested_parameters.append(param_set)
                 self.update_best_parameters(param_set)
                 self.log_iteration(param_set)
                 
