@@ -19,7 +19,7 @@ class StrategyHotReloader:
             "finrobot.config"
         ]
         self.file_mtimes: Dict[str, float] = {}
-        self.backup_dir = "/home/openclaw/FinRobot/strategy_backups"
+        self.backup_dir = "./strategy_backups"
         os.makedirs(self.backup_dir, exist_ok=True)
         self.check_mtimes()
 

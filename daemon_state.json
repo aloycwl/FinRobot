@@ -1,9 +1,9 @@
 {
-  "running": true,
-  "last_check": "2026-05-01T13:47:31.939777",
+  "running": false,
+  "last_check": null,
   "trend": 0,
   "active_positions": 0,
   "total_trades": 0,
   "pnl": 0.0,
-  "current_price": 4566.695
+  "current_price": 0.0
 }

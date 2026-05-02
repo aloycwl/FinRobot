@@ -10,7 +10,7 @@ from .config import settings
 
 logger = logging.getLogger("historical_cache")
 
-DB_PATH = "/home/openclaw/FinRobot/historical_data.db"
+DB_PATH = "./historical_data.db"
 
 
 class HistoricalCache:
