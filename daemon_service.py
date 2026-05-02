@@ -10,8 +10,10 @@ from typing import Optional
 from dataclasses import dataclass
 
 from finrobot.config import settings
-from finrobot.data_sources import fetch_okx_candles, fetch_candles
+from finrobot.data_sources import fetch_candles
 from finrobot.grid import GridConfig, backtest_xauusd_grid, calculate_trend_direction
+from finrobot.backtesting import BacktestConfig, backtest_trend_martingale
+from finrobot.hft import HFTConfig, backtest_hft
 from finrobot.feedback_loop import AutonomousFeedbackLoop
 
 logging.basicConfig(
@@ -82,38 +84,128 @@ class TradingDaemon:
             while self.state.running:
                 self.run_cycle()
                 self.save_state()
-                # No sleep - continuous backtesting loop
+                # Sleep to prevent CPU exhaustion
+                time.sleep(5)
         except KeyboardInterrupt:
             logger.info("Received interrupt signal")
         finally:
             self.stop()
 
     def run_cycle(self):
+        """Run backtesting cycle for all three strategies."""
         try:
+            # Fetch data from local CSV (10000 bars)
             df = fetch_candles(limit=10000)
             self.state.last_check = datetime.utcnow()
-            
-            if len(df) > 0:
-                self.state.current_price = float(df.iloc[-1]["close"])
 
-                # Calculate trend direction
-                df_with_trend = calculate_trend_direction(df, self.grid_config)
-                self.state.trend = int(df_with_trend.iloc[-1]["trend"])
+            if len(df) == 0:
+                logger.warning("No market data available, skipping cycle")
+                return
 
-                trend_str = "BULLISH" if self.state.trend == 1 else "BEARISH" if self.state.trend == -1 else "NEUTRAL"
-                logger.info(f"Current price: {self.state.current_price:.2f} | Trend: {trend_str}")
+            self.state.current_price = float(df.iloc[-1]["close"])
 
-                # Run full backtest with 10000 bars minimum
-                bt_result = backtest_xauusd_grid(df, self.grid_config)
-                logger.info(f"Last 10000 bars stats: Win rate {bt_result['win_rate']:.1%}, Total return {bt_result['total_return']:.2%}")
-                
-                # Autonomous feedback loop: update parameters based on results
-                self.feedback_loop.evaluate_and_update(bt_result, self.grid_config)
-            else:
-                logger.warning("No market data available, skipping price update")
+            # Get current iteration from feedback loop state
+            iteration = 381  # Default, will be updated from state file
+            try:
+                with open("/home/openclaw/FinRobot/feedback_loop_state.json", 'r') as f:
+                    state_data = json.load(f)
+                    iteration = state_data.get('iteration', 381)
+            except:
+                pass
+
+            # Run all three strategies and collect results
+            results = {}
+            errors = []
+
+            # Strategy 1: Grid Trading (XAUUSD optimized)
+            try:
+                grid_result = backtest_xauusd_grid(df, self.grid_config)
+                results['grid'] = grid_result
+                if 'error' not in grid_result:
+                    self.feedback_loop.evaluate_and_update(grid_result, self.grid_config)
+            except Exception as e:
+                errors.append(f"G:{str(e)[:15]}")
+
+            # Strategy 2: Martingale Trend Following
+            try:
+                martingale_config = BacktestConfig()
+                martingale_result = backtest_trend_martingale(df, martingale_config)
+                results['mart'] = martingale_result
+            except Exception as e:
+                errors.append(f"M:{str(e)[:15]}")
+
+            # Strategy 3: HFT (High Frequency)
+            try:
+                hft_config = HFTConfig()
+                hft_result = backtest_hft(df, hft_config)
+                results['hft'] = hft_result
+            except Exception as e:
+                errors.append(f"H:{str(e)[:15]}")
+
+            # Build concise progress line
+            price = self.state.current_price
+            gr = results.get('grid', {})
+            mr = results.get('mart', {})
+            hr = results.get('hft', {})
+
+            # Format returns
+            gr_ret = gr.get('total_return', 0) if 'error' not in gr else -999
+            mr_ret = mr.get('total_return', 0) if 'error' not in mr else -999
+            hr_ret = hr.get('total_return', 0) if 'error' not in hr else -999
+
+            # Format win rates
+            gr_wr = gr.get('win_rate', 0) if 'error' not in gr else 0
+            mr_wr = mr.get('win_rate', 0) if 'error' not in mr else 0
+            hr_wr = hr.get('win_rate', 0) if 'error' not in hr else 0
+
+            # Count trades
+            gr_tr = gr.get('total_trades', 0) if 'error' not in gr else 0
+            mr_tr = mr.get('num_trades', 0) if 'error' not in mr else 0
+            hr_tr = hr.get('num_trades', 0) if 'error' not in hr else 0
+
+            # Progress percentage (target: 10000 iterations)
+            progress_pct = min(100, (iteration / 10000) * 100)
+
+            # Best strategy indicator
+            best_strat = "-"
+            best_ret = max(gr_ret, mr_ret, hr_ret)
+            if best_ret > -999:
+                if best_ret == gr_ret:
+                    best_strat = "G"
+                elif best_ret == mr_ret:
+                    best_strat = "M"
+                else:
+                    best_strat = "H"
+
+            # Error indicator
+            err_str = f"[E:{len(errors)}]" if errors else ""
+
+            # Output format:
+            # [ITER: 381/10000 3.8%] Price: 4566.70 | G:-0.45%|19.9%|5 M:-0.99%|19.9%|7629 H:0.00%|0.0%|0 | Best:M [E:0]
+            log_line = (
+                f"[ITER: {iteration}/10000 {progress_pct:.1f}%] "
+                f"Price: {price:.2f} | "
+                f"G:{gr_ret:+.2f}%|{gr_wr*100:.1f}%|{gr_tr} "
+                f"M:{mr_ret:+.2f}%|{mr_wr*100:.1f}%|{mr_tr} "
+                f"H:{hr_ret:+.2f}%|{hr_wr*100:.1f}%|{hr_tr} | "
+                f"Best:{best_strat} {err_str}"
+            )
+
+            logger.info(log_line)
+
+            # Only log detailed summaries every 100 cycles or on errors
+            if iteration % 100 == 0 or errors:
+                summary = (
+                    f"=== SUMMARY Cycle #{iteration} ===\n"
+                    f"  GRID:  Ret={gr_ret:+.2f}% Win={gr_wr*100:.1f}% Trades={gr_tr}\n"
+                    f"  MART:  Ret={mr_ret:+.2f}% Win={mr_wr*100:.1f}% Trades={mr_tr}\n"
+                    f"  HFT:   Ret={hr_ret:+.2f}% Win={hr_wr*100:.1f}% Trades={hr_tr}\n"
+                    f"  Progress: {progress_pct:.1f}% | Best: {best_strat}"
+                )
+                logger.info(summary)
 
         except Exception as e:
-            logger.error(f"Error in cycle: {str(e)}", exc_info=True)
+            logger.error(f"Error in cycle: {str(e)}")
 
 
 def print_status():

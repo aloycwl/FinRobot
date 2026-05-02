@@ -1,0 +1,70 @@
+{
+  "grid": {
+    "timestamp": "2026-05-02T03:08:07.451579",
+    "strategy": "grid",
+    "parameters": {
+      "grid_step_pips": 0.5,
+      "take_profit_pips": 1.5,
+      "trend_ema_fast": 8,
+      "trend_ema_slow": 8,
+      "max_grid_levels": 8,
+      "base_lot": 0.05,
+      "fee_bps": 2.0,
+      "pip_value": 0.01
+    },
+    "performance": {
+      "bars": 10000,
+      "total_return": 0.0,
+      "max_drawdown": 0.0,
+      "win_rate": 0.0,
+      "total_trades": 0,
+      "win_trades": 0,
+      "grid_levels_used_max": 8
+    },
+    "data_bars": 10000,
+    "cycle": 2
+  },
+  "martingale": {
+    "timestamp": "2026-05-02T03:35:37.271487",
+    "strategy": "martingale",
+    "parameters": {
+      "multiplier": 1.25,
+      "base_lot": 0.005,
+      "max_steps": 2,
+      "ema_fast": 8,
+      "ema_slow": 34,
+      "fee_bps": 1.0
+    },
+    "performance": {
+      "bars": 10000,
+      "total_return": -0.005238344024466213,
+      "max_drawdown": -0.005238743376566601,
+      "win_rate": 0.3114431773495871,
+      "num_trades": 7629
+    },
+    "data_bars": 10000,
+    "cycle": 50
+  },
+  "hft": {
+    "timestamp": "2026-05-02T03:08:03.880250",
+    "strategy": "hft",
+    "parameters": {
+      "tick_threshold": 0.05,
+      "volume_filter": 25,
+      "latency_ms": 100,
+      "spread_limit": 0.02,
+      "fast_window": 5,
+      "slow_window": 20,
+      "fee_bps": 3.0,
+      "risk_per_trade": 0.005
+    },
+    "performance": {
+      "total_return": 0.0,
+      "max_drawdown": 0.0,
+      "win_rate": 0.0,
+      "num_trades": 0
+    },
+    "data_bars": 10000,
+    "cycle": 1
+  }
+}

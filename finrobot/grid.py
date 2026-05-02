@@ -28,11 +28,22 @@ def calculate_trend_direction(df_m1: pd.DataFrame, cfg: GridConfig) -> pd.DataFr
     """Calculate overall trend direction using 5min EMA 5/15 crossover"""
     df = df_m1.copy().reset_index()
     
+    # Handle various index/column naming conventions
+    # Data from CSV has 'time' column, but may be set as index
+    if 'index' in df.columns:
+        # If index was reset and is datetime, use it as time
+        if pd.api.types.is_datetime64_any_dtype(df['index']):
+            df = df.rename(columns={'index': 'time'})
+    
     # Handle both 'date' and 'time' columns
     if "date" in df.columns and "time" not in df.columns:
         df = df.rename(columns={"date": "time"})
     if "time" in df.columns and "date" not in df.columns:
         df["date"] = df["time"]
+        
+    # Ensure time column exists and is datetime
+    if "time" not in df.columns:
+        raise ValueError("DataFrame must have 'time' column or datetime index")
         
     df["time"] = pd.to_datetime(df["time"], utc=True)
     

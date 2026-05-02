@@ -218,20 +218,27 @@ class AutonomousFeedbackLoop:
         while self.state.running:
             try:
                 self.state.iteration += 1
-                logger.info(f"Starting optimization iteration #{self.state.iteration}")
+                iteration = self.state.iteration
+
+                # Only log iteration start every 10 iterations
+                if iteration % 10 == 1:
+                    logger.info(f"Optimization iteration #{iteration}")
 
                 # Fetch fresh market data - 10000 bars minimum for accuracy
                 df = fetch_candles(limit=10000)
 
-                # Test current best parameters first
+                # Test current best parameters first (silently, only log errors)
                 for strategy in ["grid", "martingale", "hft"]:
                     if strategy in self.state.best_parameters:
                         best_params = self.state.best_parameters[strategy]["parameters"]
                         param_set = self.evaluate_parameter_set(strategy, best_params, df)
                         self.log_iteration(param_set)
-                        logger.info(f"{strategy} baseline performance: {param_set.performance.get('total_return', 0):.2%}")
+                        # Only log baseline if it's iteration 1 or every 100
+                        if iteration == 1 or iteration % 100 == 0:
+                            logger.info(f"  [{strategy[:1].upper()}] Baseline: {param_set.performance.get('total_return', 0):.2%}")
 
                 # Run limited parameter search (50 random combinations)
+                tested_count = 0
                 for _ in range(50):
                     strategy = np.random.choice(["grid", "martingale", "hft"])
                     params = {}
@@ -239,10 +246,15 @@ class AutonomousFeedbackLoop:
                         params[key] = np.random.choice(values)
 
                     param_set = self.evaluate_parameter_set(strategy, params, df)
-                    self.update_best_parameters(param_set)
+                    was_best = self.update_best_parameters(param_set)
                     self.log_iteration(param_set)
+                    tested_count += 1
 
-                # Check for 5% hourly target
+                    # Log if it's a new best or every 50 tests
+                    if was_best or tested_count % 50 == 0:
+                        logger.info(f"  [{param_set.strategy[:1].upper()}] Test #{tested_count}: {param_set.performance.get('total_return', 0):.2%} {'★BEST' if was_best else ''}")
+
+                # Check for 5% hourly target - only log every 100 iterations or if target met
                 all_met_target = True
                 working_strategies = 0
                 for strategy in ["grid", "martingale", "hft"]:
@@ -251,54 +263,57 @@ class AutonomousFeedbackLoop:
                         ret = self.state.best_parameters[strategy]["performance"].get("total_return", 0)
                         if ret < self.state.target_hourly_return:
                             all_met_target = False
-                            logger.info(f"{strategy} not meeting target: {ret:.2%} < 5%")
+                            # Only log failing strategies every 100 iterations
+                            if iteration % 100 == 0:
+                                logger.info(f"  [{strategy[:1].upper()}] Below target: {ret:.2%} < 5%")
 
                 # Trigger opencode also if no working strategies after 10 iterations
-                if working_strategies == 0 and self.state.iteration >= 10 and self.opencode.can_call():
+                if working_strategies == 0 and iteration >= 10 and self.opencode.can_call():
                     logger.warning("No working strategies found after multiple iterations. Requesting code fix from opencode.")
                     with open(self.log_file, "r") as f:
                         last_logs = f.readlines()[-100:]
-                    self.opencode.send_feedback({"no_working_strategies": True, "iterations": self.state.iteration}, "\n".join(last_logs))
+                    self.opencode.send_feedback({"no_working_strategies": True, "iterations": iteration}, "\n".join(last_logs))
                     reload_all_modules()
 
-                if all_met_target:
+                if all_met_target and iteration % 100 == 0:
                     logger.info("✅ All strategies meeting 5% hourly return target")
 
                 self.save_state()
-                
-                # Only update daemon if we actually have working best parameters
-                if "grid" in self.state.best_parameters:
+
+                # Only update daemon every 100 iterations to reduce noise
+                if iteration % 100 == 0 and "grid" in self.state.best_parameters:
                     self.daemon.grid_config = GridConfig(**self.state.best_parameters["grid"]["parameters"])
                     logger.info("Updated daemon with latest best parameters")
 
-                # Check failure rate
-                failure_rate = sum(1 for p in self.state.tested_parameters[-50:] if "error" in p.performance) / max(1, len(self.state.tested_parameters[-50:]))
-                
-                # Call opencode when 80%+ failures detected
-                if failure_rate > 0.8 and self.opencode.can_call():
-                    logger.warning(f"High failure rate detected: {failure_rate:.0%}. Calling opencode for automatic improvements.")
-                    
-                    # Get last 50 logs
-                    with open(self.log_file, "r") as f:
-                        last_logs = f.readlines()[-50:]
-                    
-                    metrics = {
-                        "failure_rate": failure_rate,
-                        "consecutive_failures": self.consecutive_failures,
-                        "total_iterations": self.state.iteration,
-                        "working_strategies": list(self.state.best_parameters.keys())
-                    }
-                    
-                    # Execute automatic code improvement
-                    success = self.opencode.send_feedback(metrics, "\n".join(last_logs))
-                    
-                    if success:
-                        logger.info("✅ Opencode completed successfully, hot reloading all modules")
-                        reload_all_modules()
-                        self.consecutive_failures = 0
-                    else:
-                        logger.error("❌ Opencode failed to run")
-                        self.consecutive_failures += 1
+                # Check failure rate every 50 iterations
+                if iteration % 50 == 0:
+                    failure_rate = sum(1 for p in self.state.tested_parameters[-50:] if "error" in p.performance) / max(1, len(self.state.tested_parameters[-50:]))
+
+                    # Call opencode when 80%+ failures detected
+                    if failure_rate > 0.8 and self.opencode.can_call():
+                        logger.warning(f"High failure rate detected: {failure_rate:.0%}. Calling opencode for automatic improvements.")
+
+                        # Get last 50 logs
+                        with open(self.log_file, "r") as f:
+                            last_logs = f.readlines()[-50:]
+
+                        metrics = {
+                            "failure_rate": failure_rate,
+                            "consecutive_failures": self.consecutive_failures,
+                            "total_iterations": iteration,
+                            "working_strategies": list(self.state.best_parameters.keys())
+                        }
+
+                        # Execute automatic code improvement
+                        success = self.opencode.send_feedback(metrics, "\n".join(last_logs))
+
+                        if success:
+                            logger.info("✅ Opencode completed successfully, hot reloading all modules")
+                            reload_all_modules()
+                            self.consecutive_failures = 0
+                        else:
+                            logger.error("❌ Opencode failed to run")
+                            self.consecutive_failures += 1
 
                 # No sleep - continuous optimization loop
                 pass

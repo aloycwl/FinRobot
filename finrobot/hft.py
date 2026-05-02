@@ -19,7 +19,17 @@ class HFTConfig:
 
 def backtest_hft(df: pd.DataFrame, cfg: HFTConfig) -> dict:
     """Simple tick-based HFT backtest implementation"""
-    df = df.copy().sort_values("time").reset_index(drop=True)
+    df = df.copy()
+    
+    # Handle index being datetime
+    if isinstance(df.index, pd.DatetimeIndex):
+        df = df.reset_index(names="time")
+    
+    # Handle both 'date' and 'time' columns
+    if "date" in df.columns and "time" not in df.columns:
+        df = df.rename(columns={"date": "time"})
+    
+    df = df.sort_values("time").reset_index(drop=True)
 
     df["price_change"] = df["close"].pct_change().fillna(0.0)
     # Handle missing tick_volume column fallback to regular volume
