@@ -1,9 +1,14 @@
 {
-  "running": true,
-  "last_check": "2026-05-03T13:32:01.342315",
-  "trend": 0,
-  "active_positions": 0,
-  "total_trades": 0,
-  "pnl": 0.0,
-  "current_price": 4566.695
-}
+  "running": false,
+  "cycle_count": 1,
+  "best_results": {
+    "adx_trend": {
+      "total_return": -0.0002800388579827268,
+      "max_drawdown": -0.0002800388579827268,
+      "win_rate": 0.22727272727272727,
+      "num_trades": 44,
+      "profit_factor": 0.3259530661703739,
+      "avg_trade": -0.0006365323166929161,
+      "trades": [
+        {
+          "entry_time": 

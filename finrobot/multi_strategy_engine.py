@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 try:
     from finrobot.smart_money_concepts import SmartMoneyConcepts, OrderBlock
     from finrobot.harmonic_patterns import HarmonicPatternDetector, HarmonicSignal
-    from finrobot.genetic_optimizer import GeneticOptimizer, StrategyGenome, optimize_strategy_parameters
+    from finrobot.optimization.genetic_optimizer import GeneticOptimizer, StrategyGenome, optimize_strategy_parameters
     from finrobot.portfolio_manager import PortfolioManager, StrategyPerformance
 except ImportError:
     from smart_money_concepts import SmartMoneyConcepts, OrderBlock
