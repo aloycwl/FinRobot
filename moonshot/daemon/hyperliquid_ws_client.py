@@ -152,30 +152,33 @@ class HyperliquidWebSocketClient:
         except Exception as e:
             logger.error(f"Error processing message: {e}")
     
+    TARGET_COINS = {"BTC", "ETH", "SOL"}
+
     def _process_all_mids(self, data: Dict):
         """Process allMids update"""
-        # Handle nested structure: {"mids": {"BTC": 50000, "ETH": 3000}}
         if "mids" in data and isinstance(data["mids"], dict):
             prices = data["mids"]
         else:
             prices = data
-            
+
         for coin, mid_price in prices.items():
             try:
-                # Skip if mid_price is not a simple number (could be dict in some formats)
+                if coin not in self.TARGET_COINS:
+                    continue
+
                 if isinstance(mid_price, dict):
-                    # Try to extract price from common fields
                     if "mid" in mid_price:
                         price = float(mid_price["mid"])
                     elif "price" in mid_price:
                         price = float(mid_price["price"])
                     else:
-                        logger.debug(f"Skipping {coin}: unexpected nested structure")
                         continue
                 else:
                     price = float(mid_price)
-                
-                # Create or update price data
+
+                if price <= 0:
+                    continue
+
                 if coin not in self.price_data:
                     self.price_data[coin] = PriceUpdate(
                         coin=coin,
@@ -193,16 +196,15 @@ class HyperliquidWebSocketClient:
                     update.ask = price * 1.0005
                     update.last_price = price
                     update.timestamp = time.time()
-                
-                # Trigger callback
+
                 if self.on_price_update:
                     try:
                         self.on_price_update(self.price_data[coin])
                     except Exception as e:
                         logger.error(f"Error in price update callback: {e}")
-                        
+
             except (ValueError, TypeError) as e:
-                logger.error(f"Error parsing mid price for {coin}: {e}")
+                logger.debug(f"Skipping mid price for {coin}: {e}")
     
     def _process_trades(self, trades: List[Dict]):
         """Process trades update"""

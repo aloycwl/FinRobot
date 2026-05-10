@@ -12,12 +12,14 @@ from datetime import datetime
 from enum import Enum
 import random
 
-# Setup logging
+import os
+os.makedirs("logs", exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(message)s',
     handlers=[
-        logging.FileHandler('hyperliquid_moonshot.log'),
+        logging.FileHandler('logs/executor.log'),
         logging.StreamHandler()
     ]
 )
@@ -103,7 +105,7 @@ class HyperliquidPaperTrading:
         self,
         initial_balance: float = 100.0,
         symbols: List[str] = None,
-        default_leverage: float = 10.0,
+        default_leverage: float = 20.0,
         max_leverage: float = 50.0,
         maker_fee: float = 0.0002,  # 0.02%
         taker_fee: float = 0.0005,  # 0.05%
@@ -400,8 +402,9 @@ class HyperliquidPaperTrading:
             drawdown = (self.stats['peak_balance'] - current_balance) / self.stats['peak_balance']
             self.stats['max_drawdown'] = max(self.stats['max_drawdown'], drawdown)
         
-        # Remove position
-        del self.positions[symbol]
+        # Remove position (may already be removed by _update_position)
+        if symbol in self.positions:
+            del self.positions[symbol]
         
         # Log close
         pnl_emoji = "✅" if realized_pnl > 0 else "❌"

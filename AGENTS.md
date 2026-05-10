@@ -2,237 +2,154 @@
 
 ## Project Overview
 
-**FinRobot** is a self-improving autonomous algorithmic trading system with a closed feedback loop using Opencode. It trades XAUUSD (Gold), FX pairs, and Crypto using multiple strategies with automatic optimization.
+**FinRobot** is a self-improving autonomous algorithmic trading system with a closed feedback loop using Opencode. It trades XAUUSD (Gold) and Crypto (BTC, ETH, SOL) using multiple strategies with automatic optimization.
 
-## Core Architecture
+## Project Structure
 
-### 1. Background Daemon (`daemon_service.py`)
-- **Purpose**: Runs 24/7 without terminal connection
-- **PID File**: `daemon.pid` - tracks running instance
-- **State File**: `daemon_state.json` - live status
-- **Log File**: `trading_daemon.log` - main progress output
-- **Interval**: 5-second cycles between backtests
+```
+FinRobot/
+├── moonshot/                    # Moonshot Crypto Trading System (Daemon 2 - PRIMARY)
+│   ├── daemon/                  # 24/7 trading daemon core
+│   │   ├── main.py              # Main loop, strategy orchestration, WebSocket
+│   │   ├── hyperliquid_ws_client.py  # Real-time price feed from Hyperliquid
+│   │   ├── state_manager.py     # Position tracking, trade history, persistence
+│   │   └── self_improvement.py  # Strategy performance tracking, optimization, opencode feedback, strategy lab
+│   ├── strategies/              # Trading strategies & execution
+│   │   ├── strategies.py        # Signal generators (10 strategies - see below)
+│   │   └── executor.py          # Paper trading engine
+│   ├── trader.py                # Legacy trader (run_moonshot.py demo mode)
+│   └── monitor.py               # Live monitoring dashboard
+├── finrobot/                    # FinRobot Core Package (Daemon 1 - XAUUSD)
+│   ├── strategies/              # XAUUSD strategies (grid, martingale, hft, etc.)
+│   ├── execution/               # MT5/cTrader execution adapters
+│   ├── optimization/            # Feedback loop, genetic optimizer, opencode integration
+│   └── utils/                   # Config, data sources, indicators, logging
+├── scripts/                     # All management scripts
+│   ├── run_daemon.py            # Moonshot daemon launcher (systemd entry point)
+│   ├── moonshot_health_check.py # Watchdog: monitors & restarts daemon
+│   ├── run_moonshot.py          # Demo mode launcher
+│   ├── daemon_service.py        # XAUUSD daemon (Daemon 1)
+│   ├── start_daemon.sh          # XAUUSD daemon startup script
+│   └── ...                      # Backtest, health, test scripts
+├── logs/                        # ALL log files
+│   └── daemon.log               # Main trading log (tail -f this)
+├── state/                       # ALL runtime state
+│   ├── moonshot/                # Moonshot state (positions, trades, performance)
+│   └── daemon1/                 # XAUUSD daemon state
+├── data/                        # Market data (CSV, cache)
+├── backups/                     # Strategy backups
+├── docs/                        # Documentation
+└── tests/                       # Test suite
+```
 
-### 2. Continuous Backtest Engine (`continuous_backtest.py`)
-- **Purpose**: Tests strategies with random parameter combinations
-- **Strategies Tested**:
-  - Grid Trading (XAUUSD optimized)
-  - Martingale Trend Following
-  - High Frequency Trading (HFT)
-- **Cycle Interval**: 2 seconds between tests
-- **Sweep Interval**: Every 10 cycles, runs full parameter sweep
+## Core Architecture - Moonshot Daemon (Daemon 2)
 
-### 3. Opencode Feedback Loop (`finrobot/opencode_integration.py`)
-- **Purpose**: Automatically improves strategy code
-- **Rate Limit**: 75 minutes minimum between calls
-- **Trigger Conditions**:
-  - Win rate below 55%
-  - Drawdown exceeds 2%
-  - Scheduled optimization every 24 hours
-- **Action**: Sends backtest results to Opencode, which modifies code directly
+### How It Works
+1. **WebSocket Connection**: Connects to Hyperliquid API for real-time BTC/ETH/SOL prices
+2. **Candle Building**: Constructs 60-second OHLCV candles from live tick data
+3. **Signal Generation**: 10 strategies evaluate every 60 seconds (best signal per coin selected):
+   - **QuickMomentum**: EMA 8/21 crosses with RSI filter
+   - **RsiDivergence**: RSI overbought/oversold mean reversion
+   - **MicroTrend**: Momentum-based trend following
+   - **SmartMoneyConcepts**: Order blocks, fair value gaps, institutional flow
+   - **FibonacciRetracement**: Key Fib levels (0.382, 0.5, 0.618, 0.786) as S/R
+   - **MACDStrategy**: MACD divergence & crossover with RSI/EMA confirmation
+   - **VWAPStrategy**: VWAP as dynamic S/R with deviation bands
+   - **AggressiveCryptoScalper**: EMA + volume scalping
+   - **MeanReversionBandit**: Bollinger Band + RSI reversal
+   - **AggressiveADXScalper**: ADX trend strength + EMA direction
+4. **Multi-Signal Execution**: Opens up to `max_open_positions - current_positions` trades per iteration (1 per coin)
+5. **Position Management**: SL (0.5%), TP (1%), trailing stop (0.4%), stale timeout (10min), max duration (30min)
+6. **Self-Improvement**: Tracks per-strategy performance, adjusts parameters every hour
+7. **Strategy Lab**: Auto-disables persistently losing strategies (WR<30%, avg_pnl<-0.3%), re-enables after 2hr cooldown
+8. **Opencode Feedback**: Actually invokes opencode via subprocess when return < -1% or WR < 50% or DD > 3%
 
-## Key Files & Their Purposes
+### Key Parameters
+- **Initial Balance**: 100 USDT (paper trading)
+- **Max Open Positions**: 5
+- **Max Leverage**: 5x
+- **Risk Per Trade**: 2% of balance
+- **Min Confidence**: 0.45 (45%)
+- **SL**: 0.5% | **TP**: 1.0% | **Trail**: 0.4%
+- **Stale Timeout**: 600s (10min) | **Max Duration**: 1800s (30min)
+- **Signal Cooldown**: 60s per coin per strategy
 
-### State Files (JSON)
-| File | Purpose | Update Frequency |
-|------|---------|------------------|
-| `daemon_state.json` | Live daemon status (running, price, trades) | Every cycle |
-| `feedback_loop_state.json` | Best parameters per strategy, iteration count | When new best found |
-| `daemon.pid` | Process ID of running daemon | Start/Stop only |
+## How to Monitor
 
-### Log Files
-| File | Purpose | Retention |
-|------|---------|-----------|
-| `trading_daemon.log` | Main progress output - use `tail -f` | Keep last 1000 lines |
-| `backtest_logs/backtest_engine.log` | Detailed backtest results | Rotate daily |
-| `opencode_feedback.log` | Opencode interaction history | Keep all |
-| `feedback_iterations.log` | Every backtest result (JSONL) | Rotate when >100MB |
-
-### Strategy Configuration
-| File | Purpose |
-|------|---------|
-| `finrobot/grid.py` | Grid trading strategy for XAUUSD |
-| `finrobot/backtesting.py` | Martingale trend strategy |
-| `finrobot/hft.py` | High frequency trading strategy |
-| `finrobot/indicators.py` | Technical indicators library |
-
-## How to Monitor Progress
-
-### Quick Status Check
 ```bash
-# View daemon status
-python daemon_service.py status
+# Watch live moonshot trading
+tail -f logs/daemon.log
 
-# Watch live progress (recommended)
-tail -f trading_daemon.log
+# Check daemon status
+systemctl --user status moonshot-daemon.service
+
+# Run health check
+python3 scripts/moonshot_health_check.py
+
+# Watch daemon 1 (XAUUSD)
+tail -f logs/trading_daemon.log
 ```
 
-### Understanding the Log Output
-The log shows progress in this format:
+### Log Format
 ```
-2026-05-01 13:47:31 | INFO     | Cycle #381 | Price: 4566.70 | [GRID] Return: -0.45% | [MART] Return: -0.99% | [HFT] Return: 0.00%
-2026-05-01 13:47:31 | INFO     | Best: Martingale (Return: -0.99%, Win: 19.9%, Iter: 381)
+--- Iteration 5 ---
+Prices: BTC=$79,607.50 | ETH=$2,279.95 | SOL=$88.27
+Balance: 100.00 | Equity: 100.00 | Open: 0/5 | Trades: 0 | Signals: 0
+=== SUMMARY | Bal: 100.00 | Return: +0.00% | Trades: 15 | Win: 67% | DD: 0.0% | Positions: 3 ===
+  STRATEGIES: Quick_Mo:3t|67wr|+0.080% | SMC_Orde:2t|50wr|+0.120% | Fib_Retr:1t|100wr|+0.250%
 ```
 
-Key metrics to watch:
-- **Cycle #**: Current iteration count
-- **Price**: Current XAUUSD price
-- **[GRID]/[MART]/[HFT] Return**: Profit/loss percentage for each strategy
-- **Best**: Current best performing strategy with stats
+## Daemon Management
 
-## Critical Lessons Learned
+```bash
+# Start moonshot daemon
+systemctl --user start moonshot-daemon.service
 
-### 1. Data Column Bug (Fixed)
-- **Issue**: `fetch_candles()` returned DataFrame with 'date' column as index, but backtesting looked for 'time' column
-- **Fix**: Modified `backtesting.py` to handle both index and column naming
-- **Date Fixed**: 2026-05-01
+# Stop
+systemctl --user stop moonshot-daemon.service
 
-### 2. Parameter Name Mismatches (Fixed)
-- **Issue**: Config classes used different parameter names than the backtest engine expected
-- **Fixed Names**:
-  - GridConfig: `grid_step` → `grid_step_pips`
-  - HFTConfig: `tick_threshold` → correct
-  - BacktestConfig: `ema_fast`/`ema_slow` → correct
+# Restart
+systemctl --user restart moonshot-daemon.service
 
-### 3. JSON Serialization Error (Fixed)
-- **Issue**: numpy int64 types couldn't be serialized to JSON in logs
-- **Fix**: Added `NumpyJsonEncoder` class to handle numpy types
-
-### 4. Strategy Performance Insights
-
-#### Martingale Strategy
-- **Best Parameters Found**:
-  - multiplier: 1.25
-  - base_lot: 0.005
-  - max_steps: 2
-  - ema_fast: 8
-  - ema_slow: 34
-- **Performance**: -0.99% return, 19.9% win rate (POOR)
-- **Issue**: Win rate far below 55% target
-
-#### Grid Strategy
-- **Best Parameters Found**:
-  - grid_step_pips: 1.0
-  - take_profit_pips: 3.0
-  - trend_ema_fast: 21
-  - trend_ema_slow: 21
-  - max_grid_levels: 2
-  - base_lot: 0.02
-- **Performance**: 0% return, 0% win rate, 0 trades
-- **Issue**: Not executing any trades - likely due to grid spacing too tight
-
-#### HFT Strategy
-- **Best Parameters Found**:
-  - tick_threshold: 0.08
-  - volume_filter: 10
-  - latency_ms: 50
-  - spread_limit: 0.01
-- **Performance**: 0% return, 0% win rate, 0 trades
-- **Issue**: Not executing any trades - tick threshold may be too high for XAUUSD volatility
-
-## Recommended Next Steps
-
-1. **Fix Grid Strategy**: Reduce `grid_step_pips` to 0.5-1.0 for XAUUSD volatility
-2. **Fix HFT Strategy**: Lower `tick_threshold` to 0.02-0.05 for XAUUSD
-3. **Improve Martingale**: Test with faster EMA periods (5/12 instead of 8/34)
-4. **Add New Indicators**: Test ADX, Ichimoku, Order Blocks per opencode instructions
-5. **Target Metrics**: Aim for 5% hourly return, 85%+ win rate, <1.5% max drawdown
+# Enable on boot
+systemctl --user enable moonshot-daemon.service
+```
 
 ## File Modification Guidelines
 
-When Opencode (or any agent) modifies code:
+When modifying code:
+1. **Backup First**: Copy originals to `backups/`
+2. **Test Immediately**: Run daemon and check logs
+3. **Update AGENTS.md**: Document what changed and why
+4. **Hot Reload**: Daemon picks up changes on restart (systemctl --user restart)
+5. **Validate**: Check `tail -f logs/daemon.log` for errors
 
-1. **Backup First**: Always copy original to `strategy_backups/`
-2. **Test Immediately**: Run backtest after changes
-3. **Log Changes**: Update this AGENTS.md with what was changed and why
-4. **Hot Reload**: Changes are automatically picked up by daemon
-5. **Validation**: Ensure code runs without errors before considering success
+## Critical Lessons Learned
 
-## Emergency Contacts & Resources
+### 1. Warmup Period Required
+The daemon needs 120 seconds to build enough candles before trading starts. Don't panic if you see "No high-confidence signals found" in the first few minutes.
 
-- **Opencode CLI**: `/home/openclaw/.npm-global/bin/opencode`
-- **Python Environment**: Virtual env in project root
-- **Data Source**: Local CSV files in `data/` directory
-- **MT5 Connection**: Credentials in `.env` file
+### 2. Stale State Causes Crashes
+If `state/moonshot/positions.json` has very old positions (>1hr), the daemon may crash on startup. Reset with: `echo '{}' > state/moonshot/positions.json`
 
-## Recent Updates (2026-05-02)
+### 3. systemd Service Configuration
+`StartLimitIntervalSec` must be in `[Unit]` section, not `[Service]`. Wrong placement causes warnings and restart failures.
 
-### ✅ Log Optimization Completed
-**Problem**: Log files were growing extremely large with verbose output every cycle.
+### 4. Duplicate Logging
+Multiple modules configuring `logging.basicConfig()` causes duplicate log lines. The daemon's `main.py` now handles all logging configuration.
 
-**Solution Implemented**:
-1. **Daemon Logging** (`daemon_service.py`):
-   - Now outputs **one clean line per cycle** with all key metrics
-   - Format: `[ITER: X/10000 X.X%] Price: X | G:ret%|win%|trades M:... H:... | Best:X [E:N]`
-   - Progress percentage shown (target: 10,000 iterations)
-   - Summary only every 10 cycles
+### 5. SL/TP Must Match Timeframe
+Wide SL/TP (2%/4%) on 60-second candles causes 97% of trades to exit via STALE at random PnL. Tightened to 0.5%/1% for scalping.
 
-2. **Continuous Backtest** (`continuous_backtest.py`):
-   - Reduced verbosity by ~90%
-   - Only logs new "best" parameters or errors
-   - Summaries every 100 iterations instead of every cycle
+### 6. Only One Signal Per Cycle Starves The System
+Picking only the best signal across all coins/strategies means 1 trade per minute max. Changed to open 1 signal per coin per cycle, filling all available position slots.
 
-3. **Feedback Loop** (`finrobot/feedback_loop.py`):
-   - Logging reduced to key events only
-   - Baseline tests logged every 100 iterations
-   - Best parameter updates logged when found
-
-4. **Log Rotation** (`rotate_logs.sh`):
-   - Created automatic log rotation script
-   - Keeps only last 1000 lines of `trading_daemon.log`
-   - Archives files >100MB with gzip
-   - Run manually or add to crontab for automatic rotation
-
-### How to Monitor Progress Now
-
-Simply run:
-```bash
-tail -f /home/openclaw/FinRobot/trading_daemon.log
-```
-
-You'll see one clean line per cycle:
-```
-[ITER: 382/10000 3.8%] Price: 4566.70 | G:-0.45%|19.9%|5 M:-0.99%|19.9%|7629 H:0.00%|0.0%|0 | Best:M
-```
-
-**Fields explained:**
-- `ITER: current/max percentage` - Progress tracking
-- `Price: XAUUSD price`
-- `G: return%|win%|trades` - Grid strategy summary
-- `M: return%|win%|trades` - Martingale strategy summary  
-- `H: return%|win%|trades` - HFT strategy summary
-- `Best: [G/M/H]` - Which strategy is currently best
-- `[E: N]` - Number of errors this cycle (only shown if >0)
+### 7. Opencode Feedback Must Actually Invoke Opencode
+The old `OpencodeFeedback` only wrote to a JSONL file. Now it invokes opencode via subprocess with a structured performance report prompt.
 
 ---
 
-**Last Updated**: 2026-05-02  
-**Iteration Count**: 381 → optimizing toward 10,000  
-**Daemon Status**: Running  
-**Best Strategy**: Martingale (Return: -0.99%, Win Rate: 19.9%)  
-**Current Optimization**: Reducing log verbosity, focusing on actionable metrics
-
----
-
-## 📚 Important Documents
-
-- **[IMPROVEMENTS_SUMMARY.md](IMPROVEMENTS_SUMMARY.md)** - Complete improvement summary with performance metrics
-- **[AGENTS.md](AGENTS.md)** - This file: Agent documentation and project structure
-- **[rotate_logs.sh](rotate_logs.sh)** - Log rotation script
-
----
-
-**Quick Commands:**
-```bash
-# Start daemon
-python daemon_service.py start
-
-# Check status
-python daemon_service.py status
-
-# Watch logs
-tail -f trading_daemon.log
-
-# Stop daemon
-python daemon_service.py stop
-```
+**Last Updated**: 2026-05-09
+**Major Changes**: Tightened SL/TP, added 4 new strategies (SMC, Fibonacci, VWAP, MACD), fixed opencode feedback, added strategy lab, multi-signal execution, max positions 3->5
+**Daemon 2 Status**: Running via systemd
+**Daemon 1 Status**: Preserved but not actively used (all strategies unprofitable)

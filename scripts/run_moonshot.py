@@ -20,17 +20,21 @@ Examples:
 """
 
 import sys
+import os
 import time
 import argparse
 import logging
 from typing import Optional
 
-# Setup logging
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
+os.makedirs("logs", exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(message)s',
     handlers=[
-        logging.FileHandler('hyperliquid_moonshot.log'),
+        logging.FileHandler('logs/demo.log'),
         logging.StreamHandler()
     ]
 )
@@ -67,7 +71,7 @@ def run_demo(duration_minutes: float = 5.0):
     logger.info("-" * 70)
     
     try:
-        from hyperliquid_trader import HyperliquidMoonshotTrader
+        from moonshot.trader import HyperliquidMoonshotTrader
         
         # Create trader
         trader = HyperliquidMoonshotTrader(

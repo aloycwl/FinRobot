@@ -11,11 +11,11 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import pandas as pd
 
-from hyperliquid_executor import (
+from moonshot.strategies.executor import (
     HyperliquidPaperTrading, HyperliquidDataFeed,
     OrderSide, OrderType, create_paper_trading_system
 )
-from hyperliquid_strategies import (
+from moonshot.strategies.strategies import (
     AggressiveADXScalper, AggressiveCryptoScalper,
     BreakoutHunter, MeanReversionBandit,
     TradingSignal, SignalType
@@ -26,7 +26,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(message)s',
     handlers=[
-        logging.FileHandler('hyperliquid_moonshot.log'),
+        logging.FileHandler('logs/trader.log'),
         logging.StreamHandler()
     ]
 )

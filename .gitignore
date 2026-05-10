@@ -5,3 +5,10 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 *.log
+logs/
+state/
+backups/
+*.db
+*.jsonl
+*.pid
+daemon_state.json

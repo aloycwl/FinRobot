@@ -8,7 +8,7 @@ import time
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, date
 from collections import deque
 import threading
 import os
@@ -91,7 +91,8 @@ class TradeRecord:
     pnl_pct: float
     exit_reason: str  # "tp", "sl", "signal", "manual"
     fees: float = 0.0
-    
+    strategy: str = ""
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             'trade_id': self.trade_id,
@@ -107,6 +108,7 @@ class TradeRecord:
             'pnl_pct': self.pnl_pct,
             'exit_reason': self.exit_reason,
             'fees': self.fees,
+            'strategy': self.strategy,
             'entry_datetime': datetime.fromtimestamp(self.entry_time).isoformat(),
             'exit_datetime': datetime.fromtimestamp(self.exit_time).isoformat()
         }
@@ -123,7 +125,7 @@ class StateManager:
     
     def __init__(
         self,
-        data_dir: str = "moonshot_data",
+        data_dir: str = "state/moonshot",
         save_interval: float = 30.0,
         max_trade_history: int = 10000
     ):
@@ -147,7 +149,7 @@ class StateManager:
         
         # Statistics
         self.daily_stats = {
-            'date': datetime.now().date(),
+            'date': datetime.now().date().isoformat(),
             'starting_equity': 100.0,
             'trades': 0,
             'wins': 0,
@@ -215,16 +217,12 @@ class StateManager:
                 
                 # Save state
                 # Convert daily_stats date to string for JSON serialization
-                daily_stats_copy = self.daily_stats.copy()
-                if 'date' in daily_stats_copy and hasattr(daily_stats_copy['date'], 'isoformat'):
-                    daily_stats_copy['date'] = daily_stats_copy['date'].isoformat()
-                
                 state_data = {
                     'balance': self.balance,
                     'equity': self.equity,
                     'margin_used': self.margin_used,
                     'free_margin': self.free_margin,
-                    'daily_stats': daily_stats_copy,
+                    'daily_stats': self.daily_stats,
                     'timestamp': time.time(),
                     'datetime': datetime.now().isoformat()
                 }
@@ -241,35 +239,55 @@ class StateManager:
     def _load_state(self):
         """Load state from disk"""
         try:
-            # Load positions
             if os.path.exists(self.positions_file):
                 with open(self.positions_file, 'r') as f:
-                    positions_data = json.load(f)
-                
-                for symbol, data in positions_data.items():
-                    try:
-                        self.positions[symbol] = PositionState.from_dict(data)
-                    except Exception as e:
-                        logger.error(f"Error loading position {symbol}: {e}")
-                
-                logger.info(f"Loaded {len(self.positions)} positions from disk")
-            
-            # Load state
+                    content = f.read().strip()
+                    if content and content != '{}':
+                        positions_data = json.loads(content)
+                        for symbol, data in positions_data.items():
+                            try:
+                                self.positions[symbol] = PositionState.from_dict(data)
+                            except Exception as e:
+                                logger.error(f"Error loading position {symbol}: {e}")
+                        logger.info(f"Loaded {len(self.positions)} positions from disk")
+                    else:
+                        logger.info("No positions to load")
+
             if os.path.exists(self.state_file):
                 with open(self.state_file, 'r') as f:
-                    state_data = json.load(f)
-                
-                self.balance = state_data.get('balance', 100.0)
-                self.equity = state_data.get('equity', 100.0)
-                self.margin_used = state_data.get('margin_used', 0.0)
-                self.free_margin = state_data.get('free_margin', 100.0)
-                self.daily_stats = state_data.get('daily_stats', self.daily_stats)
-                
-                logger.info(f"Loaded state: balance={self.balance:.2f}, equity={self.equity:.2f}")
-            
+                    content = f.read().strip()
+                    if not content:
+                        logger.info("Empty state file, using defaults")
+                    else:
+                        state_data = json.loads(content)
+                        self.balance = state_data.get('balance', 100.0)
+                        self.equity = state_data.get('equity', 100.0)
+                        self.margin_used = state_data.get('margin_used', 0.0)
+                        self.free_margin = state_data.get('free_margin', 100.0)
+
+                        loaded_stats = state_data.get('daily_stats', {})
+                        if loaded_stats:
+                            date_val = loaded_stats.get('date')
+                            if isinstance(date_val, date) and not isinstance(date_val, datetime):
+                                loaded_stats['date'] = date_val.isoformat()
+                            self.daily_stats.update(loaded_stats)
+
+                        logger.info(f"Loaded state: balance={self.balance:.2f}, equity={self.equity:.2f}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Corrupt state file, resetting to defaults: {e}")
+            self._reset_state_file()
         except Exception as e:
             logger.error(f"Error loading state: {e}")
-            # Continue with default values
+
+    def _reset_state_file(self):
+        """Reset state files to clean defaults"""
+        for fpath in [self.positions_file, self.state_file]:
+            try:
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+            except Exception:
+                pass
     
     def add_position(self, position: PositionState):
         """Add a new position"""

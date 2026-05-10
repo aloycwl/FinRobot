@@ -10,10 +10,10 @@ set -euo pipefail
 
 # Configuration
 PROJECT_DIR="/home/openclaw/FinRobot"
-DAEMON_SCRIPT="daemon_service.py"
-PID_FILE="${PROJECT_DIR}/daemon.pid"
-LOG_FILE="${PROJECT_DIR}/trading_daemon.log"
-ERROR_LOG="${PROJECT_DIR}/daemon_errors.log"
+DAEMON_SCRIPT="scripts/daemon_service.py"
+PID_FILE="${PROJECT_DIR}/state/daemon1/daemon.pid"
+LOG_FILE="${PROJECT_DIR}/logs/trading_daemon.log"
+ERROR_LOG="${PROJECT_DIR}/logs/daemon_errors.log"
 MAX_RESTARTS=10
 RESTART_DELAY=5
 
