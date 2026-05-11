@@ -181,8 +181,8 @@ class AggressiveADXScalper:
         # Volume check
         avg_volume = volumes.rolling(window=20).mean().iloc[-1]
         current_volume = volumes.iloc[-1]
-        volume_spike = current_volume > (avg_volume * self.volume_threshold)
-        
+        volume_spike = current_volume > (avg_volume * self.volume_threshold) if avg_volume > 0 else True
+
         # Get current values
         current_adx = adx.iloc[-1] if not pd.isna(adx.iloc[-1]) else 0
         current_atr = atr.iloc[-1] if not pd.isna(atr.iloc[-1]) else current_price * 0.01
@@ -190,18 +190,18 @@ class AggressiveADXScalper:
         slow_val = ema_slow.iloc[-1]
         prev_fast = ema_fast.iloc[-2] if len(ema_fast) > 1 else fast_val
         prev_slow = ema_slow.iloc[-2] if len(ema_slow) > 1 else slow_val
-        
+
         # Check for crossover
         bullish_cross = (prev_fast <= prev_slow) and (fast_val > slow_val)
         bearish_cross = (prev_fast >= prev_slow) and (fast_val < slow_val)
-        
+
         signal = None
         confidence = 0.0
-        
+
         # Bullish signal conditions
-        if bullish_cross and current_adx > self.adx_threshold and volume_spike:
+        if bullish_cross and current_adx > self.adx_threshold:
             confidence = min(1.0, (current_adx / 50.0) + (0.2 if volume_spike else 0.0))
-            
+
             # Calculate stop loss and take profit
             stop_loss = current_price - (current_atr * 1.0)
             take_profit = current_price + (current_atr * self.risk_reward)
@@ -233,7 +233,7 @@ class AggressiveADXScalper:
             )
         
         # Bearish signal conditions
-        elif bearish_cross and current_adx > self.adx_threshold and volume_spike:
+        elif bearish_cross and current_adx > self.adx_threshold:
             confidence = min(1.0, (current_adx / 50.0) + (0.2 if volume_spike else 0.0))
             
             # Calculate stop loss and take profit
@@ -328,34 +328,33 @@ class AggressiveCryptoScalper:
         rsi = self.indicators.rsi(closes, self.rsi_period)
         
         # Volume analysis
-        avg_volume = volumes.rolling(window=20).mean().iloc[-1]
+        avg_volume = volumes.rolling(window=20).mean().iloc[-1] if len(volumes) >= 20 else 1
         current_volume = volumes.iloc[-1]
-        volume_spike = current_volume > (avg_volume * self.volume_threshold)
-        
+        volume_spike = current_volume > (avg_volume * self.volume_threshold) if avg_volume > 0 else True
+
         # Get current values
         fast_val = ema_fast.iloc[-1]
         slow_val = ema_slow.iloc[-1]
         current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
-        
+
         prev_fast = ema_fast.iloc[-2] if len(ema_fast) > 1 else fast_val
         prev_slow = ema_slow.iloc[-2] if len(ema_slow) > 1 else slow_val
-        
+
         # Calculate price change
         price_change_pct = abs(closes.iloc[-1] - closes.iloc[-5]) / closes.iloc[-5] if len(closes) >= 5 else 0
-        
+
         signal = None
-        
+
         # Bullish scalping setup
         if (fast_val > slow_val and prev_fast <= prev_slow and  # EMA cross
             current_rsi < self.rsi_overbought and  # Not overbought
-            volume_spike and  # Volume confirmation
             price_change_pct >= self.min_move_pct):  # Sufficient movement
-            
+
             confidence = 0.6 + (0.2 if volume_spike else 0) + (0.1 if current_rsi < 50 else 0)
             confidence = min(1.0, confidence)
-            
+
             stop_loss = current_price * 0.997
-            take_profit = current_price * 1.006
+            take_profit = current_price * 1.009
             
             # Max position with high leverage
             max_position_value = account_balance * self.max_leverage * 0.9  # Use 90% of available
@@ -378,14 +377,13 @@ class AggressiveCryptoScalper:
         # Bearish scalping setup
         elif (fast_val < slow_val and prev_fast >= prev_slow and  # EMA cross
               current_rsi > self.rsi_oversold and  # Not oversold
-              volume_spike and
               price_change_pct >= self.min_move_pct):
-            
+
             confidence = 0.6 + (0.2 if volume_spike else 0) + (0.1 if current_rsi > 50 else 0)
             confidence = min(1.0, confidence)
-            
+
             stop_loss = current_price * 1.003
-            take_profit = current_price * 0.994
+            take_profit = current_price * 0.991
             
             max_position_value = account_balance * self.max_leverage * 0.9
             position_size = max_position_value / current_price
@@ -472,9 +470,9 @@ class BreakoutHunter:
             return None
         
         # Volume analysis
-        avg_volume = volumes.tail(self.lookback_period).mean()
+        avg_volume = volumes.tail(self.lookback_period).mean() if len(volumes) > 0 else 1
         current_volume = volumes.iloc[-1]
-        volume_confirmed = current_volume > (avg_volume * self.volume_multiplier)
+        volume_confirmed = current_volume > (avg_volume * self.volume_multiplier) if avg_volume > 0 else True
         
         # EMA filter
         ema_filter = self.indicators.ema(closes, self.ema_filter_period)
@@ -561,7 +559,7 @@ class MeanReversionBandit:
         rsi_overbought: float = 75,
         rsi_oversold: float = 25,
         volume_threshold: float = 1.2,
-        adx_filter_max: float = 20.0,  # Only trade when ADX < 20 (ranging)
+        adx_filter_max: float = 30.0,  # Only trade when ADX < 30 (ranging to mild trend)
         max_leverage: float = 15.0
     ):
         self.name = "Mean_Reversion_Bandit"
@@ -609,9 +607,9 @@ class MeanReversionBandit:
         adx = self.indicators.adx(highs, lows, closes, 14)
         
         # Volume check
-        avg_volume = volumes.tail(20).mean()
+        avg_volume = volumes.tail(20).mean() if len(volumes) >= 20 else 1
         current_volume = volumes.iloc[-1]
-        volume_ok = current_volume > (avg_volume * self.volume_threshold)
+        volume_ok = current_volume > (avg_volume * self.volume_threshold) if avg_volume > 0 else True
         
         # Get current values
         current_upper = upper.iloc[-1]
@@ -788,9 +786,9 @@ class SmartMoneyConcepts:
 
         closes = ohlcv['close']
         volumes = ohlcv.get('volume', pd.Series([1] * len(ohlcv)))
-        avg_vol = volumes.rolling(20).mean().iloc[-1]
+        avg_vol = volumes.rolling(20).mean().iloc[-1] if len(volumes) >= 20 else 1
         cur_vol = volumes.iloc[-1]
-        vol_ok = cur_vol > avg_vol * self.volume_threshold
+        vol_ok = cur_vol > avg_vol * self.volume_threshold if avg_vol > 0 else True
 
         ema50 = closes.rolling(50).mean().iloc[-1] if len(closes) >= 50 else current_price
         uptrend = current_price > ema50
@@ -810,7 +808,7 @@ class SmartMoneyConcepts:
             confidence = min(0.85, confidence)
 
             sl = bull_ob["low"] * 0.997
-            tp = current_price * 1.006
+            tp = current_price * 1.009
             size = (account_balance * 0.12) / current_price
             signal = TradingSignal(
                 symbol=symbol, signal_type=SignalType.BUY,
@@ -831,7 +829,7 @@ class SmartMoneyConcepts:
             confidence = min(0.85, confidence)
 
             sl = bear_ob["high"] * 1.003
-            tp = current_price * 0.994
+            tp = current_price * 0.991
             size = (account_balance * 0.12) / current_price
             signal = TradingSignal(
                 symbol=symbol, signal_type=SignalType.SELL,
@@ -847,7 +845,7 @@ class SmartMoneyConcepts:
                 if current_price <= fvg["top"] and current_price >= fvg["bottom"]:
                     confidence = 0.5 + min(0.2, fvg["size_pct"] * 20)
                     sl = fvg["bottom"] * 0.997
-                    tp = current_price * 1.006
+                    tp = current_price * 1.009
                     size = (account_balance * 0.10) / current_price
                     signal = TradingSignal(
                         symbol=symbol, signal_type=SignalType.BUY,
@@ -861,7 +859,7 @@ class SmartMoneyConcepts:
                 if current_price >= fvg["bottom"] and current_price <= fvg["top"]:
                     confidence = 0.5 + min(0.2, fvg["size_pct"] * 20)
                     sl = fvg["top"] * 1.003
-                    tp = current_price * 0.994
+                    tp = current_price * 0.991
                     size = (account_balance * 0.10) / current_price
                     signal = TradingSignal(
                         symbol=symbol, signal_type=SignalType.SELL,
@@ -887,7 +885,7 @@ class FibonacciRetracement:
     def __init__(
         self,
         swing_lookback: int = 30,
-        confluence_threshold: float = 0.003,
+        confluence_threshold: float = 0.001,
         max_leverage: float = 5.0,
     ):
         self.name = "Fibonacci_Retracement"
@@ -896,6 +894,7 @@ class FibonacciRetracement:
         self.max_leverage = max_leverage
         self.indicators = TechnicalIndicators()
         self.last_signal_time = {}
+        self.cooldown_seconds = 90
 
     def _find_swing_points(self, ohlcv: pd.DataFrame) -> Tuple[Optional[float], Optional[float]]:
         lookback = min(self.swing_lookback, len(ohlcv))
@@ -920,13 +919,18 @@ class FibonacciRetracement:
         import time as _time
         now = _time.time()
         coin = symbol.replace("-PERP", "")
-        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 15:
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < self.cooldown_seconds:
             return None
 
-        if len(ohlcv) < self.swing_lookback + 10:
+        if len(ohlcv) < self.swing_lookback + 5:
             return None
 
         closes = ohlcv['close']
+        volumes = ohlcv.get('volume', pd.Series([1] * len(ohlcv)))
+        avg_vol = volumes.rolling(20).mean().iloc[-1] if len(volumes) >= 20 else 1
+        cur_vol = volumes.iloc[-1]
+        vol_ok = cur_vol > avg_vol * 0.8
+
         swing_high, swing_low = self._find_swing_points(ohlcv)
         if swing_high is None or swing_low is None:
             return None
@@ -945,14 +949,16 @@ class FibonacciRetracement:
 
         signal = None
 
-        if uptrend and current_price >= fib_price * 0.997 and current_price <= fib_price * 1.003:
+        if uptrend and vol_ok and current_price >= fib_price * 0.997 and current_price <= fib_price * 1.003:
             confidence = 0.55 + (0.1 if fib_name in ("0.618", "0.786") else 0.05)
             if cur_rsi < 45:
                 confidence += 0.1
+            if vol_ok:
+                confidence += 0.05
             confidence = min(0.85, confidence)
 
             sl = fib_price * 0.997
-            tp = current_price * 1.006
+            tp = current_price * 1.009
             size = (account_balance * 0.10) / current_price
             signal = TradingSignal(
                 symbol=symbol, signal_type=SignalType.BUY,
@@ -963,14 +969,16 @@ class FibonacciRetracement:
             )
             self.last_signal_time[coin] = now
 
-        elif downtrend and current_price <= fib_price * 1.003 and current_price >= fib_price * 0.997:
+        elif downtrend and vol_ok and current_price <= fib_price * 1.003 and current_price >= fib_price * 0.997:
             confidence = 0.55 + (0.1 if fib_name in ("0.382", "0.236") else 0.05)
             if cur_rsi > 55:
                 confidence += 0.1
+            if vol_ok:
+                confidence += 0.05
             confidence = min(0.85, confidence)
 
             sl = fib_price * 1.003
-            tp = current_price * 0.994
+            tp = current_price * 0.991
             size = (account_balance * 0.10) / current_price
             signal = TradingSignal(
                 symbol=symbol, signal_type=SignalType.SELL,
@@ -1041,9 +1049,9 @@ class VWAPStrategy:
 
         closes = ohlcv['close']
         volumes = ohlcv.get('volume', pd.Series([1] * len(ohlcv)))
-        avg_vol = volumes.rolling(20).mean().iloc[-1]
+        avg_vol = volumes.rolling(20).mean().iloc[-1] if len(volumes) >= 20 else 1
         cur_vol = volumes.iloc[-1]
-        vol_ok = cur_vol > avg_vol * self.volume_threshold
+        vol_ok = cur_vol > avg_vol * self.volume_threshold if avg_vol > 0 else True
 
         vwap_val, upper_band, lower_band, upper_rev, lower_rev = self._calculate_vwap(ohlcv)
 
@@ -1093,7 +1101,7 @@ class VWAPStrategy:
             if current_price > vwap_val and closes.iloc[-2] <= vwap_val and uptrend:
                 confidence = 0.55 + 0.1
                 sl = vwap_val * 0.997
-                tp = current_price * 1.006
+                tp = current_price * 1.009
                 size = (account_balance * 0.08) / current_price
                 signal = TradingSignal(
                     symbol=symbol, signal_type=SignalType.BUY,
@@ -1106,7 +1114,7 @@ class VWAPStrategy:
             elif current_price < vwap_val and closes.iloc[-2] >= vwap_val and downtrend:
                 confidence = 0.55 + 0.1
                 sl = vwap_val * 1.003
-                tp = current_price * 0.994
+                tp = current_price * 0.991
                 size = (account_balance * 0.08) / current_price
                 signal = TradingSignal(
                     symbol=symbol, signal_type=SignalType.SELL,
@@ -1220,7 +1228,7 @@ class MACDStrategy:
             confidence = 0.55 + (0.1 if cur_hist > 0 else 0.0) + (0.1 if cur_rsi < 50 else 0.0)
             confidence = min(0.85, confidence)
             sl = current_price * 0.997
-            tp = current_price * 1.006
+            tp = current_price * 1.009
             size = (account_balance * 0.12) / current_price
             signal = TradingSignal(
                 symbol=symbol, signal_type=SignalType.BUY,
@@ -1235,7 +1243,7 @@ class MACDStrategy:
             confidence = 0.55 + (0.1 if cur_hist < 0 else 0.0) + (0.1 if cur_rsi > 50 else 0.0)
             confidence = min(0.85, confidence)
             sl = current_price * 1.003
-            tp = current_price * 0.994
+            tp = current_price * 0.991
             size = (account_balance * 0.12) / current_price
             signal = TradingSignal(
                 symbol=symbol, signal_type=SignalType.SELL,
@@ -1250,7 +1258,7 @@ class MACDStrategy:
             confidence = 0.6 + (0.1 if hist_flip_bull else 0.0)
             confidence = min(0.85, confidence)
             sl = current_price * 0.997
-            tp = current_price * 1.006
+            tp = current_price * 1.009
             size = (account_balance * 0.10) / current_price
             signal = TradingSignal(
                 symbol=symbol, signal_type=SignalType.BUY,
@@ -1265,7 +1273,7 @@ class MACDStrategy:
             confidence = 0.6 + (0.1 if hist_flip_bear else 0.0)
             confidence = min(0.85, confidence)
             sl = current_price * 1.003
-            tp = current_price * 0.994
+            tp = current_price * 0.991
             size = (account_balance * 0.10) / current_price
             signal = TradingSignal(
                 symbol=symbol, signal_type=SignalType.SELL,
