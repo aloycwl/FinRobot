@@ -430,7 +430,7 @@ class BreakoutHunter:
         
         self.indicators = TechnicalIndicators()
         self.last_breakout_time = 0
-        self.cooldown_period = 120
+        self.cooldown_period = 60
     
     def generate_signal(
         self,
@@ -574,7 +574,7 @@ class MeanReversionBandit:
         
         self.indicators = TechnicalIndicators()
         self.last_trade_time = 0
-        self.cooldown_period = 60
+        self.cooldown_period = 30
     
     def generate_signal(
         self,
@@ -778,7 +778,7 @@ class SmartMoneyConcepts:
         import time as _time
         now = _time.time()
         coin = symbol.replace("-PERP", "")
-        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 15:
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 5:
             return None
 
         if len(ohlcv) < self.ob_lookback + 5:
@@ -894,7 +894,7 @@ class FibonacciRetracement:
         self.max_leverage = max_leverage
         self.indicators = TechnicalIndicators()
         self.last_signal_time = {}
-        self.cooldown_seconds = 90
+        self.cooldown_seconds = 15
 
     def _find_swing_points(self, ohlcv: pd.DataFrame) -> Tuple[Optional[float], Optional[float]]:
         lookback = min(self.swing_lookback, len(ohlcv))
@@ -1003,7 +1003,7 @@ class VWAPStrategy:
         self,
         vwap_std_mult: float = 2.0,
         reversion_band: float = 1.5,
-        volume_threshold: float = 1.3,
+        volume_threshold: float = 1.0,
         max_leverage: float = 5.0,
     ):
         self.name = "VWAP_Mean"
@@ -1018,10 +1018,16 @@ class VWAPStrategy:
         typical = (ohlcv['high'] + ohlcv['low'] + ohlcv['close']) / 3
         vol = ohlcv.get('volume', pd.Series([1.0] * len(ohlcv)))
 
-        cum_tp_vol = (typical * vol).cumsum()
-        cum_vol = vol.cumsum()
+        has_real_volume = vol.sum() > len(vol) * 0.5 and vol.std() > 0.01
 
-        vwap = cum_tp_vol / cum_vol
+        if has_real_volume:
+            window = min(60, len(ohlcv))
+            cum_tp_vol = (typical * vol).rolling(window).sum()
+            cum_vol = vol.rolling(window).sum()
+            vwap = cum_tp_vol / cum_vol
+        else:
+            vwap = typical.rolling(20).mean()
+
         vwap_val = vwap.iloc[-1] if not pd.isna(vwap.iloc[-1]) else ohlcv['close'].iloc[-1]
 
         deviations = typical - vwap
@@ -1041,7 +1047,7 @@ class VWAPStrategy:
         import time as _time
         now = _time.time()
         coin = symbol.replace("-PERP", "")
-        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 15:
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 5:
             return None
 
         if len(ohlcv) < 25:
@@ -1186,7 +1192,7 @@ class MACDStrategy:
         import time as _time
         now = _time.time()
         coin = symbol.replace("-PERP", "")
-        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 15:
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 5:
             return None
 
         if len(ohlcv) < self.macd_slow + self.macd_signal + 5:

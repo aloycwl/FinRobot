@@ -232,6 +232,11 @@ class ParameterOptimizer:
             "vwap_std_mult": [1.5, 2.0, 2.5],
             "reversion_band": [1.0, 1.5, 2.0],
         },
+        "Range_Scalper": {
+            "bb_period": [15, 20, 25],
+            "bb_std": [1.5, 2.0, 2.5],
+            "rsi_period": [10, 14, 21],
+        },
     }
 
     def __init__(self, strategy_tracker: StrategyPerformanceTracker):

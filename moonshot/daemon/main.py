@@ -69,7 +69,7 @@ class QuickMomentum:
         import time as _time
         now = _time.time()
         coin = symbol.replace("-PERP", "")
-        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 15:
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 5:
             return None
 
         min_len = max(self.ema_slow, self.rsi_period) + 3
@@ -133,7 +133,7 @@ class QuickMomentum:
 class RsiDivergence:
     """RSI overbought/oversold mean reversion with trend filter"""
 
-    def __init__(self, rsi_period: int = 14, rsi_ob: float = 78, rsi_os: float = 22,
+    def __init__(self, rsi_period: int = 14, rsi_ob: float = 72, rsi_os: float = 28,
                  max_leverage: float = 20.0):
         self.name = "RSI_Reversion"
         self.rsi_period = rsi_period
@@ -148,7 +148,7 @@ class RsiDivergence:
         import time as _time
         now = _time.time()
         coin = symbol.replace("-PERP", "")
-        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 15:
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 5:
             return None
 
         if len(ohlcv) < max(self.rsi_period + 3, 50):
@@ -165,8 +165,8 @@ class RsiDivergence:
         downtrend = current_price < ema20 and ema20 < ema50
 
         signal = None
-        if cur_rsi < self.rsi_os and prev_rsi < self.rsi_os:
-            confidence = 0.6 + (self.rsi_os - cur_rsi) / 100
+        if cur_rsi < self.rsi_os:
+            confidence = 0.55 + (self.rsi_os - cur_rsi) / 100
             if uptrend:
                 confidence += 0.1
             sl = current_price * 0.997
@@ -181,7 +181,7 @@ class RsiDivergence:
             )
             self.last_signal_time[coin] = now
 
-        elif cur_rsi > self.rsi_ob and prev_rsi > self.rsi_ob:
+        elif cur_rsi > self.rsi_ob:
             if uptrend:
                 return None
             confidence = 0.6 + (cur_rsi - self.rsi_ob) / 100
@@ -218,7 +218,7 @@ class MicroTrend:
         import time as _time
         now = _time.time()
         coin = symbol.replace("-PERP", "")
-        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 15:
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 5:
             return None
 
         if len(ohlcv) < self.lookback + 2:
@@ -264,6 +264,114 @@ class MicroTrend:
                 rationale=f"uTrend SHORT: mom={momentum*100:.2f}%, short={short_mom*100:.2f}%"
             )
             self.last_signal_time[coin] = now
+
+        return signal
+
+
+class RangeScalper:
+    """Range-bound scalper - trades mean reversion in sideways markets
+    Uses Bollinger Bands + RSI to catch bounces off extremes in ranging conditions"""
+
+    def __init__(self, bb_period: int = 20, bb_std: float = 2.0,
+                 rsi_period: int = 14, max_leverage: float = 5.0):
+        self.name = "Range_Scalper"
+        self.bb_period = bb_period
+        self.bb_std = bb_std
+        self.rsi_period = rsi_period
+        self.max_leverage = max_leverage
+        self.indicators = TechnicalIndicators()
+        self.last_signal_time = {}
+
+    def generate_signal(self, symbol: str, ohlcv: pd.DataFrame,
+                        current_price: float, account_balance: float) -> Optional[TradingSignal]:
+        import time as _time
+        now = _time.time()
+        coin = symbol.replace("-PERP", "")
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 5:
+            return None
+
+        if len(ohlcv) < max(self.bb_period, self.rsi_period) + 5:
+            return None
+
+        closes = ohlcv['close']
+        highs = ohlcv['high']
+        lows = ohlcv['low']
+
+        upper, middle, lower = self.indicators.bollinger_bands(
+            closes, self.bb_period, self.bb_std
+        )
+        rsi = self.indicators.rsi(closes, self.rsi_period)
+        adx = self.indicators.adx(highs, lows, closes, 14)
+
+        cur_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
+        cur_adx = adx.iloc[-1] if not pd.isna(adx.iloc[-1]) else 25
+        cur_upper = upper.iloc[-1] if not pd.isna(upper.iloc[-1]) else current_price * 1.01
+        cur_lower = lower.iloc[-1] if not pd.isna(lower.iloc[-1]) else current_price * 0.99
+        cur_mid = middle.iloc[-1] if not pd.isna(middle.iloc[-1]) else current_price
+
+        is_ranging = cur_adx < 25
+
+        signal = None
+
+        if is_ranging and current_price <= cur_lower * 1.005 and cur_rsi < 42:
+            confidence = 0.50 + min(0.25, (42 - cur_rsi) / 100)
+            sl = current_price * 0.996
+            tp = cur_mid
+            size = (account_balance * 0.10) / current_price
+            signal = TradingSignal(
+                symbol=symbol, signal_type=SignalType.BUY,
+                confidence=min(0.85, confidence), suggested_leverage=self.max_leverage,
+                suggested_size=size, entry_price=current_price,
+                stop_loss=sl, take_profit=tp,
+                rationale=f"Range LONG: BB lower touch, RSI={cur_rsi:.0f}, ADX={cur_adx:.0f}"
+            )
+            self.last_signal_time[coin] = now
+
+        elif is_ranging and current_price >= cur_upper * 0.995 and cur_rsi > 58:
+            confidence = 0.50 + min(0.25, (cur_rsi - 58) / 100)
+            sl = current_price * 1.004
+            tp = cur_mid
+            size = (account_balance * 0.10) / current_price
+            signal = TradingSignal(
+                symbol=symbol, signal_type=SignalType.SELL,
+                confidence=min(0.85, confidence), suggested_leverage=self.max_leverage,
+                suggested_size=size, entry_price=current_price,
+                stop_loss=sl, take_profit=tp,
+                rationale=f"Range SHORT: BB upper touch, RSI={cur_rsi:.0f}, ADX={cur_adx:.0f}"
+            )
+            self.last_signal_time[coin] = now
+
+        elif is_ranging and cur_rsi < 45 and current_price < cur_mid * 0.998:
+            prev_rsi = rsi.iloc[-2] if len(rsi) > 1 and not pd.isna(rsi.iloc[-2]) else 50
+            if cur_rsi > prev_rsi:
+                confidence = 0.48 + min(0.15, (45 - cur_rsi) / 100)
+                sl = current_price * 0.996
+                tp = cur_mid
+                size = (account_balance * 0.08) / current_price
+                signal = TradingSignal(
+                    symbol=symbol, signal_type=SignalType.BUY,
+                    confidence=min(0.80, confidence), suggested_leverage=self.max_leverage,
+                    suggested_size=size, entry_price=current_price,
+                    stop_loss=sl, take_profit=tp,
+                    rationale=f"Range LONG: RSI bounce {prev_rsi:.0f}->{cur_rsi:.0f}, below mid, ADX={cur_adx:.0f}"
+                )
+                self.last_signal_time[coin] = now
+
+        elif is_ranging and cur_rsi > 55 and current_price > cur_mid * 1.002:
+            prev_rsi = rsi.iloc[-2] if len(rsi) > 1 and not pd.isna(rsi.iloc[-2]) else 50
+            if cur_rsi < prev_rsi:
+                confidence = 0.48 + min(0.15, (cur_rsi - 55) / 100)
+                sl = current_price * 1.004
+                tp = cur_mid
+                size = (account_balance * 0.08) / current_price
+                signal = TradingSignal(
+                    symbol=symbol, signal_type=SignalType.SELL,
+                    confidence=min(0.80, confidence), suggested_leverage=self.max_leverage,
+                    suggested_size=size, entry_price=current_price,
+                    stop_loss=sl, take_profit=tp,
+                    rationale=f"Range SHORT: RSI fade {prev_rsi:.0f}->{cur_rsi:.0f}, above mid, ADX={cur_adx:.0f}"
+                )
+                self.last_signal_time[coin] = now
 
         return signal
 
@@ -361,19 +469,22 @@ class MoonshotDaemon:
                 rsi_ob=65, rsi_os=35, max_leverage=5.0,
             ),
             RsiDivergence(
-                rsi_period=14, rsi_ob=78, rsi_os=22, max_leverage=5.0,
+                rsi_period=14, rsi_ob=70, rsi_os=30, max_leverage=5.0,
             ),
             SmartMoneyConcepts(
                 ob_lookback=20, fvg_min_size_pct=0.002, max_leverage=5.0,
             ),
             FibonacciRetracement(
-                swing_lookback=15, confluence_threshold=0.0025, max_leverage=5.0,
+                swing_lookback=10, confluence_threshold=0.005, max_leverage=5.0,
             ),
             MACDStrategy(
                 macd_fast=12, macd_slow=26, macd_signal=9, max_leverage=5.0,
             ),
             VWAPStrategy(
                 vwap_std_mult=2.0, reversion_band=1.5, max_leverage=5.0,
+            ),
+            RangeScalper(
+                bb_period=20, bb_std=2.0, rsi_period=14, max_leverage=5.0,
             ),
         ]
 
@@ -392,23 +503,46 @@ class MoonshotDaemon:
 
         self.max_open_positions = 5
         self.max_risk_per_trade_pct = 0.02
-        self.stop_loss_pct = 0.003
-        self.take_profit_pct = 0.009
+        self.stop_loss_pct = 0.006
+        self.take_profit_pct = 0.012
         self.trailing_stop_pct = 0.005
         self.max_drawdown_pct = 0.50
         self.max_position_duration = 3600
         self.stale_position_threshold = 999999
         self.stale_pnl_threshold = 0.001
-        self.min_confidence = 0.50
+        self.min_confidence = 0.55
         self.max_leverage = 5.0
-        self.trade_cooldown = 60
+        self.trade_cooldown = 5
         self._last_trade_time = 0.0
-        self.use_atr_sl_tp = True
-        self.atr_sl_mult = 5.0
-        self.atr_tp_mult = 15.0
-        self.atr_trail_mult = 10.0
+        self.use_atr_sl_tp = False
+        self.atr_sl_mult = 7.0
+        self.atr_tp_mult = 9.0
+        self.atr_trail_mult = 6.0
         self.atr_period = 30
         self.coin_vol_mult = {"BTC": 1.0, "ETH": 1.0, "SOL": 1.5}
+        self.partial_tp_enabled = True
+        self.partial_tp_pct = 0.50
+        self.partial_tp_rr = 1.0
+        self._partial_closed = {}
+        self._partial_pnl: Dict[str, float] = {}
+        self.confluence_boost = 0.10
+        self.candle_builder_5m = CandleBuilder(timeframe_seconds=300)
+        self.strategy_coin_blacklist = {
+            "SMC_OrderFlow": {"SOL", "ETH"},
+            "Fibonacci_Retracement": {"SOL"},
+            "MACD_Divergence": {"SOL"},
+            "VWAP_Mean": {"BTC"},
+        }
+        self.stale_drift_exit = False
+        self.stale_drift_min_age = 2700
+        self.stale_drift_max_pnl_pct = 0.05
+
+        self.breakeven_stop_enabled = True
+        self.breakeven_activation_pct = 0.003
+        self._breakeven_hit: Dict[str, bool] = {}
+        self.trail_activation_pct = 0.005
+        self.max_sl_pct = 0.015
+        self.max_tp_pct = 0.025
 
         self.current_prices: Dict[str, float] = {}
         self.position_highest: Dict[str, float] = {}
@@ -418,18 +552,21 @@ class MoonshotDaemon:
         self.position_trail: Dict[str, float] = {}
 
         logger.info("=" * 70)
-        logger.info("MOONSHOT DAEMON INITIALIZED - ATR DYNAMIC SL/TP (5x Lev)")
+        logger.info("MOONSHOT DAEMON INITIALIZED - V6 ENFORCED SL/TP FLOORS")
         logger.info("=" * 70)
         logger.info(f"  Initial Balance: {initial_balance} USDT")
         logger.info(f"  Symbols: {', '.join(self.symbols)}")
         logger.info(f"  Check Interval: {check_interval}s")
         logger.info(f"  Paper Trading: {paper_trading}")
         logger.info(f"  Max Leverage: {self.max_leverage}x | Risk/Trade: {self.max_risk_per_trade_pct*100:.1f}%")
-        logger.info(f"  ATR SL/TP: {'ON' if self.use_atr_sl_tp else 'OFF'} (SL={self.atr_sl_mult}x ATR, TP={self.atr_tp_mult}x ATR, Trail={self.atr_trail_mult}x ATR, Period={self.atr_period})")
-        logger.info(f"  Fallback SL: {self.stop_loss_pct*100:.2f}% | TP: {self.take_profit_pct*100:.2f}% | Trail: {self.trailing_stop_pct*100:.2f}%")
+        logger.info(f"  ATR SL/TP: {'ON' if self.use_atr_sl_tp else 'OFF'} | SL: {self.stop_loss_pct*100:.2f}%-{self.max_sl_pct*100:.2f}% | TP: {self.take_profit_pct*100:.2f}%-{self.max_tp_pct*100:.2f}% | Trail: {self.trailing_stop_pct*100:.2f}%")
         logger.info(f"  Coin Vol Mult: {self.coin_vol_mult}")
         logger.info(f"  MinConf: {self.min_confidence} | Cooldown: {self.trade_cooldown}s | MaxPos: {self.max_open_positions}")
-        logger.info(f"  Stale: DISABLED | Timeout: {self.max_position_duration}s | Strategies: {len(self.strategies)}")
+        logger.info(f"  Timeout: {self.max_position_duration}s | Strategies: {len(self.strategies)}")
+        logger.info(f"  PartialTP: {'ON' if self.partial_tp_enabled else 'OFF'} ({self.partial_tp_pct*100:.0f}% at {self.partial_tp_rr}R) | ConfluenceBoost: +{self.confluence_boost}")
+        logger.info(f"  MultiTF: 1m + 5m candles | RangingMarket detection: ON")
+        logger.info(f"  Blacklist: {self.strategy_coin_blacklist} | DriftExit: {'ON' if self.stale_drift_exit else 'OFF'}")
+        logger.info(f"  BreakevenStop: {'ON' if self.breakeven_stop_enabled else 'OFF'} (activate at {self.breakeven_activation_pct*100:.1f}%) | TrailActivation: {self.trail_activation_pct*100:.1f}%")
         logger.info("=" * 70)
 
     def initialize(self):
@@ -478,6 +615,7 @@ class MoonshotDaemon:
         self.current_prices[coin] = update.mid
 
         self.candle_builder.update(coin, update.mid)
+        self.candle_builder_5m.update(coin, update.mid)
 
         self.trading_engine.update_price(
             f"{coin}-PERP" if f"{coin}-PERP" in self.trading_engine.symbols else coin,
@@ -513,6 +651,38 @@ class MoonshotDaemon:
         if pd.isna(atr):
             return None
         return float(atr)
+
+    def _detect_market_regime(self, coin: str) -> str:
+        df = self.candle_builder.get_ohlcv_df(coin, min_candles=30)
+        if df is None or len(df) < 30:
+            return "unknown"
+        closes = df['close'].astype(float)
+        highs = df['high'].astype(float)
+        lows = df['low'].astype(float)
+        from moonshot.strategies.strategies import TechnicalIndicators
+        adx = TechnicalIndicators.adx(highs, lows, closes, 14)
+        cur_adx = adx.iloc[-1] if not pd.isna(adx.iloc[-1]) else 25
+        if cur_adx < 20:
+            return "ranging"
+        elif cur_adx < 28:
+            return "mild_trend"
+        else:
+            return "trending"
+
+    def _get_5m_trend(self, coin: str) -> str:
+        df = self.candle_builder_5m.get_ohlcv_df(coin, min_candles=5)
+        if df is None or len(df) < 5:
+            return "unknown"
+        closes = df['close'].astype(float)
+        if len(closes) < 10:
+            return "unknown"
+        ema5 = closes.rolling(5).mean().iloc[-1]
+        ema10 = closes.rolling(10).mean().iloc[-1] if len(closes) >= 10 else ema5
+        if ema5 > ema10 * 1.0005:
+            return "uptrend"
+        elif ema5 < ema10 * 0.9995:
+            return "downtrend"
+        return "ranging"
 
     def _get_atr_sl_tp(self, coin: str, current_price: float, side: SignalType) -> Tuple[float, float, float]:
         vol_mult = self.coin_vol_mult.get(coin, 1.0)
@@ -569,21 +739,60 @@ class MoonshotDaemon:
 
         if pos.side == OrderSide.BUY:
             pnl_pct = (current_price - pos.entry_price) / pos.entry_price
+            risk_distance = abs(pos.entry_price - pos_sl)
             should_close_sl = current_price <= pos_sl
             should_close_tp = current_price >= pos_tp
             trailing_stop = highest - pos_trail
-            should_close_trail = current_price < trailing_stop and highest > pos.entry_price * 1.005
+            should_close_trail = current_price < trailing_stop and highest > pos.entry_price * (1 + self.trail_activation_pct)
             should_close_timeout = position_age > self.max_position_duration
+            if self.breakeven_stop_enabled and pnl_pct >= self.breakeven_activation_pct:
+                if not self._breakeven_hit.get(coin, False):
+                    self._breakeven_hit[coin] = True
+                be_sl = pos.entry_price * 1.0001
+                if be_sl > pos_sl:
+                    pos_sl = be_sl
+                    self.position_sl[coin] = be_sl
+                    should_close_sl = current_price <= pos_sl
         else:
             pnl_pct = (pos.entry_price - current_price) / pos.entry_price
+            risk_distance = abs(pos.entry_price - pos_sl)
             should_close_sl = current_price >= pos_sl
             should_close_tp = current_price <= pos_tp
             trailing_stop = highest + pos_trail
-            should_close_trail = current_price > trailing_stop and highest < pos.entry_price * 0.995
+            should_close_trail = current_price > trailing_stop and highest < pos.entry_price * (1 - self.trail_activation_pct)
             should_close_timeout = position_age > self.max_position_duration
+            if self.breakeven_stop_enabled and pnl_pct >= self.breakeven_activation_pct:
+                if not self._breakeven_hit.get(coin, False):
+                    self._breakeven_hit[coin] = True
+                be_sl = pos.entry_price * 0.9999
+                if be_sl < pos_sl:
+                    pos_sl = be_sl
+                    self.position_sl[coin] = be_sl
+                    should_close_sl = current_price >= pos_sl
+
+        if self.partial_tp_enabled and coin not in self._partial_closed and risk_distance > 0:
+            if pos.side == OrderSide.BUY:
+                partial_tp_price = pos.entry_price + risk_distance * self.partial_tp_rr
+                if current_price >= partial_tp_price:
+                    partial_size = pos.size * self.partial_tp_pct
+                    if partial_size > 0 and pos.size - partial_size > 0:
+                        self._partial_closed[coin] = True
+                        self._do_partial_close(symbol, coin, partial_size, current_price, "PARTIAL_TP")
+            else:
+                partial_tp_price = pos.entry_price - risk_distance * self.partial_tp_rr
+                if current_price <= partial_tp_price:
+                    partial_size = pos.size * self.partial_tp_pct
+                    if partial_size > 0 and pos.size - partial_size > 0:
+                        self._partial_closed[coin] = True
+                        self._do_partial_close(symbol, coin, partial_size, current_price, "PARTIAL_TP")
+
+        should_close_drift = False
+        if self.stale_drift_exit and position_age > self.stale_drift_min_age:
+            if abs(pnl_pct * 100) < self.stale_drift_max_pnl_pct:
+                should_close_drift = True
 
         should_close = (should_close_sl or should_close_tp or should_close_trail
-                        or should_close_timeout)
+                        or should_close_timeout or should_close_drift)
 
         if should_close:
             if should_close_sl:
@@ -592,6 +801,8 @@ class MoonshotDaemon:
                 reason = "TP"
             elif should_close_trail:
                 reason = "TRAIL"
+            elif should_close_drift:
+                reason = "DRIFT"
             elif should_close_timeout:
                 reason = "TIMEOUT"
             else:
@@ -611,6 +822,10 @@ class MoonshotDaemon:
                 del self.position_tp[coin]
             if coin in self.position_trail:
                 del self.position_trail[coin]
+            if coin in self._breakeven_hit:
+                del self._breakeven_hit[coin]
+            if coin in self._partial_closed:
+                del self._partial_closed[coin]
 
             emoji = "+" if realized > 0 else ""
             logger.info(
@@ -620,11 +835,33 @@ class MoonshotDaemon:
 
             self._record_trade_to_state(coin, pos, realized, reason)
 
+    def _do_partial_close(self, symbol: str, coin: str, size: float, current_price: float, reason: str):
+        try:
+            pos = self.trading_engine.positions.get(symbol)
+            if pos is None or size <= 0 or size >= pos.size:
+                return
+            partial_pnl = pos.calculate_unrealized_pnl(current_price) * (size / pos.size)
+            close_side = OrderSide.SELL if pos.side == OrderSide.BUY else OrderSide.BUY
+            self.trading_engine.place_order(
+                symbol=symbol, side=close_side, size=size,
+                order_type=OrderType.MARKET, leverage=pos.leverage,
+            )
+            self.total_trades += 1
+            self._partial_pnl[coin] = self._partial_pnl.get(coin, 0.0) + partial_pnl
+            logger.info(
+                f"  PARTIAL CLOSE {coin} {reason} | Size: {size:.6f}/{pos.size:.6f} | "
+                f"EstPnL: {partial_pnl:+.4f} | AccPartialPnL: {self._partial_pnl[coin]:+.4f} | Price: {current_price:.2f} | Bal: {self.trading_engine.balance:.2f}"
+            )
+        except Exception as e:
+            logger.error(f"Partial close error for {coin}: {e}")
+
     def _record_trade_to_state(self, coin: str, pos, realized: float, reason: str):
         try:
             exit_price = self.current_prices.get(coin, pos.entry_price)
+            partial_pnl = self._partial_pnl.pop(coin, 0.0)
+            total_realized = realized + partial_pnl
             if pos.size > 0 and pos.entry_price > 0:
-                pnl_pct_val = (realized / (pos.entry_price * pos.size)) * 100
+                pnl_pct_val = (total_realized / (pos.entry_price * pos.size)) * 100
             else:
                 pnl_pct_val = 0.0
 
@@ -651,7 +888,7 @@ class MoonshotDaemon:
                     strategy_name=last_strategy,
                     coin=coin,
                     side="long" if pos.side == OrderSide.BUY else "short",
-                    pnl=realized,
+                    pnl=total_realized,
                     pnl_pct=pnl_pct_val,
                     exit_reason=reason,
                     duration=time.time() - pos.timestamp,
@@ -659,9 +896,25 @@ class MoonshotDaemon:
         except Exception as e:
             logger.error(f"Error recording trade: {e}")
 
-    def _compute_position_size(self, symbol: str, entry_price: float, stop_price: float) -> float:
+    def _compute_position_size(self, symbol: str, entry_price: float, stop_price: float, strategy_name: str = "unknown") -> float:
         balance = self.trading_engine.get_available_balance()
-        risk_amount = balance * self.max_risk_per_trade_pct
+        risk_pct = self.max_risk_per_trade_pct
+
+        if self._strategy_tracker and strategy_name != "unknown":
+            perf = self._strategy_tracker.get_performance(strategy_name, lookback=30)
+            if perf and perf["trades"] >= 5:
+                wr = perf["win_rate"]
+                pf = perf.get("profit_factor", 1.0)
+                if wr >= 70 and pf > 1.5:
+                    risk_pct = self.max_risk_per_trade_pct * 1.5
+                elif wr >= 55 and pf > 1.0:
+                    risk_pct = self.max_risk_per_trade_pct * 1.2
+                elif wr < 40 or pf < 0.5:
+                    risk_pct = self.max_risk_per_trade_pct * 0.3
+                elif wr < 50 or pf < 0.8:
+                    risk_pct = self.max_risk_per_trade_pct * 0.5
+
+        risk_amount = balance * risk_pct
         risk_per_unit = abs(entry_price - stop_price)
         if risk_per_unit <= 0:
             return 0.0
@@ -714,6 +967,8 @@ class MoonshotDaemon:
         if self._self_improver and self._self_improver.strategy_lab:
             active_strategies = self._self_improver.strategy_lab.evaluate_strategies(self.strategies)
 
+        coin_signal_counts: Dict[str, List[Tuple[SignalType, str]]] = {}
+
         for coin in target_coins:
             if coin not in available_prices:
                 continue
@@ -722,7 +977,7 @@ class MoonshotDaemon:
             if symbol in self.trading_engine.positions:
                 continue
 
-            df = self.candle_builder.get_ohlcv_df(coin, min_candles=10)
+            df = self.candle_builder.get_ohlcv_df(coin, min_candles=5)
             if df is None:
                 candle_count = len(self.candle_builder.candles.get(coin, []))
                 logger.debug(f"  {coin}: only {candle_count} candles, need 15+")
@@ -731,6 +986,9 @@ class MoonshotDaemon:
             current_price = available_prices[coin]
 
             for strategy in active_strategies:
+                sname = getattr(strategy, 'name', strategy.__class__.__name__)
+                if sname in self.strategy_coin_blacklist and coin in self.strategy_coin_blacklist[sname]:
+                    continue
                 try:
                     signal = strategy.generate_signal(
                         symbol=symbol,
@@ -739,11 +997,38 @@ class MoonshotDaemon:
                         account_balance=balance,
                     )
                     if signal:
+                        if coin not in coin_signal_counts:
+                            coin_signal_counts[coin] = []
+                        coin_signal_counts[coin].append((signal.signal_type, sname))
                         existing_conf = coin_signals.get(coin, (None, "", 0.0))[2]
                         if signal.confidence > existing_conf:
-                            coin_signals[coin] = (signal, getattr(strategy, 'name', strategy.__class__.__name__), signal.confidence)
+                            coin_signals[coin] = (signal, sname, signal.confidence)
                 except Exception as e:
                     logger.debug(f"Strategy {strategy.name} error for {coin}: {e}")
+
+        for coin, signals_list in coin_signal_counts.items():
+            if len(signals_list) >= 2 and coin in coin_signals:
+                buy_count = sum(1 for st, _ in signals_list if st == SignalType.BUY)
+                sell_count = sum(1 for st, _ in signals_list if st == SignalType.SELL)
+                dominant = max(buy_count, sell_count)
+                if dominant >= 2:
+                    signal, sname, conf = coin_signals[coin]
+                    signal.confidence = min(0.95, signal.confidence + self.confluence_boost)
+                    coin_signals[coin] = (signal, sname, signal.confidence)
+                    logger.info(f"  CONFLUENCE: {coin} has {dominant}/{len(signals_list)} strategies agreeing, confidence boosted to {signal.confidence:.2f}")
+
+        for coin in coin_signals:
+            signal, sname, conf = coin_signals[coin]
+            tf5 = self._get_5m_trend(coin)
+            if tf5 != "unknown":
+                sig_dir = signal.signal_type
+                if (sig_dir == SignalType.BUY and tf5 == "uptrend") or \
+                   (sig_dir == SignalType.SELL and tf5 == "downtrend"):
+                    signal.confidence = min(0.95, signal.confidence + 0.05)
+                elif (sig_dir == SignalType.BUY and tf5 == "downtrend") or \
+                     (sig_dir == SignalType.SELL and tf5 == "uptrend"):
+                    signal.confidence = max(0.0, signal.confidence - 0.05)
+                coin_signals[coin] = (signal, sname, signal.confidence)
 
         sorted_signals = sorted(coin_signals.items(), key=lambda x: x[1][2], reverse=True)
 
@@ -834,21 +1119,6 @@ class MoonshotDaemon:
             stop_price, take_profit, trail_distance = self._get_atr_sl_tp(
                 coin, current_price, signal.signal_type
             )
-            vol_mult = self.coin_vol_mult.get(coin, 1.0)
-            min_sl_pct = self.stop_loss_pct * vol_mult
-            min_tp_pct = self.take_profit_pct * vol_mult
-            sl_pct_actual = abs(stop_price - current_price) / current_price
-            tp_pct_actual = abs(take_profit - current_price) / current_price
-            if sl_pct_actual < min_sl_pct:
-                if signal.signal_type == SignalType.BUY:
-                    stop_price = current_price * (1 - min_sl_pct)
-                else:
-                    stop_price = current_price * (1 + min_sl_pct)
-            if tp_pct_actual < min_tp_pct:
-                if signal.signal_type == SignalType.BUY:
-                    take_profit = current_price * (1 + min_tp_pct)
-                else:
-                    take_profit = current_price * (1 - min_tp_pct)
         else:
             stop_price = signal.stop_loss or (
                 current_price * (1 - self.stop_loss_pct) if signal.signal_type == SignalType.BUY
@@ -860,7 +1130,36 @@ class MoonshotDaemon:
                 else current_price * (1 - self.take_profit_pct)
             )
 
-        size = self._compute_position_size(signal.symbol, current_price, stop_price)
+        vol_mult = self.coin_vol_mult.get(coin, 1.0)
+        min_sl_pct = self.stop_loss_pct * vol_mult
+        min_tp_pct = self.take_profit_pct * vol_mult
+        sl_pct_actual = abs(stop_price - current_price) / current_price
+        tp_pct_actual = abs(take_profit - current_price) / current_price
+        if sl_pct_actual < min_sl_pct:
+            if signal.signal_type == SignalType.BUY:
+                stop_price = current_price * (1 - min_sl_pct)
+            else:
+                stop_price = current_price * (1 + min_sl_pct)
+        if tp_pct_actual < min_tp_pct:
+            if signal.signal_type == SignalType.BUY:
+                take_profit = current_price * (1 + min_tp_pct)
+            else:
+                take_profit = current_price * (1 - min_tp_pct)
+
+        sl_pct_final = abs(stop_price - current_price) / current_price
+        tp_pct_final = abs(take_profit - current_price) / current_price
+        if sl_pct_final > self.max_sl_pct:
+            if signal.signal_type == SignalType.BUY:
+                stop_price = current_price * (1 - self.max_sl_pct)
+            else:
+                stop_price = current_price * (1 + self.max_sl_pct)
+        if tp_pct_final > self.max_tp_pct:
+            if signal.signal_type == SignalType.BUY:
+                take_profit = current_price * (1 + self.max_tp_pct)
+            else:
+                take_profit = current_price * (1 - self.max_tp_pct)
+
+        size = self._compute_position_size(signal.symbol, current_price, stop_price, strategy_name=strategy_name)
         if size <= 0:
             logger.info(f"  Signal for {coin} skipped: size too small")
             return
@@ -919,6 +1218,10 @@ class MoonshotDaemon:
             logger.error(f"  Order error for {coin}: {e}")
 
     def _check_trend_filter(self, signal: TradingSignal, coin: str) -> bool:
+        regime = self._detect_market_regime(coin)
+        if regime == "ranging":
+            return True
+
         df = self.candle_builder.get_ohlcv_df(coin, min_candles=30)
         if df is None or len(df) < 30:
             return True
@@ -929,14 +1232,14 @@ class MoonshotDaemon:
 
         if ema20 is not None and ema50 is not None:
             if signal.signal_type == SignalType.SELL and ema20 > ema50 * 1.001:
-                confidence_penalty = 0.15
+                confidence_penalty = 0.08 if regime == "mild_trend" else 0.15
                 signal.confidence = max(0.0, signal.confidence - confidence_penalty)
-                if signal.confidence < 0.45:
+                if signal.confidence < 0.40:
                     return False
             elif signal.signal_type == SignalType.BUY and ema20 < ema50 * 0.999:
-                confidence_penalty = 0.15
+                confidence_penalty = 0.08 if regime == "mild_trend" else 0.15
                 signal.confidence = max(0.0, signal.confidence - confidence_penalty)
-                if signal.confidence < 0.45:
+                if signal.confidence < 0.40:
                     return False
 
         return True

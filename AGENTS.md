@@ -139,7 +139,7 @@ If `state/moonshot/positions.json` has very old positions (>1hr), the daemon may
 Multiple modules configuring `logging.basicConfig()` causes duplicate log lines. The daemon's `main.py` now handles all logging configuration.
 
 ### 5. SL/TP Must Match Timeframe
-Wide SL/TP (2%/4%) on 60-second candles causes 97% of trades to exit via STALE at random PnL. Tightened to 0.5%/1% for scalping.
+Wide SL/TP (2%/4%) on 60-second candles causes 97% of trades to exit via STALE at random PnL. Tightened to 0.5%/1% for scalping. Later V4 update: widened to 0.6%/1.2% with breakeven stops to balance hit rate vs. reward.
 
 ### 6. Only One Signal Per Cycle Starves The System
 Picking only the best signal across all coins/strategies means 1 trade per minute max. Changed to open 1 signal per coin per cycle, filling all available position slots.
@@ -147,9 +147,21 @@ Picking only the best signal across all coins/strategies means 1 trade per minut
 ### 7. Opencode Feedback Must Actually Invoke Opencode
 The old `OpencodeFeedback` only wrote to a JSONL file. Now it invokes opencode via subprocess with a structured performance report prompt.
 
+### 8. DRIFT/TIMEOUT Exits Dominate When Params Are Too Tight
+V3 had 88.6% of 247 trades exiting via DRIFT (44.5%) or TIMEOUT (44.1%) with only 1.3% hitting TP. Root cause: too-tight SL/TP floors (0.4%/0.7%), short max duration (1800s), and aggressive DRIFT exit (age>900s, pnl<0.15%). V4 fixes: SL=0.6%, TP=1.2%, Trail=0.5%, max_duration=3600s, DRIFT age>2700s/pnl<0.05%, breakeven stop at 0.3% favorable move, trail activation at 0.5%. V5: disabled ATR-based SL/TP (was computing too-tight levels from 1m ATR), disabled DRIFT exit entirely, raised min_confidence 0.45→0.55.
+
+### 9. Blacklist Losing Coin/Strategy Combos
+SMC+ETH had 37.5% WR (-0.177 USDT), MACD+SOL had 50% WR (-0.096 USDT), VWAP+BTC had 0% WR (-0.188 USDT). Added to strategy_coin_blacklist to prevent these combos from trading.
+
+### 10. ATR SL/TP Can Be Counterproductive on 1m Candles
+With `use_atr_sl_tp=True`, the system computed SL/TP from 1m candle ATR and then clipped to floor minimums. Since ATR on 1m candles is tiny, the ATR-based levels were often tighter than the floors, defeating the purpose of widened fixed floors. V5 disables ATR SL/TP entirely and uses fixed 0.6%/1.2%/0.5%.
+
+### 11. Strategy-Provided SL/TP Can Be Tighter Than Floor Minimums
+When `use_atr_sl_tp=False`, the code used `signal.stop_loss` and `signal.take_profit` from strategies, which were much tighter than the floor minimums (e.g. 0.3% SL / 0.9% TP from VWAP vs. 0.6%/1.2% floors). The floor enforcement only ran in the ATR branch. V6 moves floor enforcement (min and max) to run after both the ATR and signal branches, ensuring SL is always 0.6%-1.5% and TP is always 1.2%-2.5% regardless of source.
+
 ---
 
-**Last Updated**: 2026-05-09
-**Major Changes**: Tightened SL/TP, added 4 new strategies (SMC, Fibonacci, VWAP, MACD), fixed opencode feedback, added strategy lab, multi-signal execution, max positions 3->5
-**Daemon 2 Status**: Running via systemd
+**Last Updated**: 2026-05-13
+**Major Changes**: V6 - enforced SL/TP floor minimums (0.6%/1.2%) and maximums (1.5%/2.5%) regardless of ATR or strategy source, fixed root cause of tight SL/TP from strategy signals
+**Daemon 2 Status**: Running via systemd (V6)
 **Daemon 1 Status**: Preserved but not actively used (all strategies unprofitable)
