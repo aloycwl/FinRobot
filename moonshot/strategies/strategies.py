@@ -1293,16 +1293,252 @@ class MACDStrategy:
         return signal
 
 
+class CrossAssetLeadLag:
+    """
+    Cross-Asset Lead-Lag Strategy
+    BTC leads ETH/SOL by 1-3 minutes on 1m charts.
+    When BTC makes a significant move and ETH/SOL haven't followed,
+    trade the laggard in the same direction.
+    """
+
+    def __init__(self, lookback: int = 5, btc_move_threshold: float = 0.001,
+                 lag_threshold: float = 0.3, max_leverage: float = 5.0):
+        self.name = "Cross_Lead_Lag"
+        self.lookback = lookback
+        self.btc_move_threshold = btc_move_threshold
+        self.lag_threshold = lag_threshold
+        self.max_leverage = max_leverage
+        self.last_signal_time = {}
+
+    def generate_signal(self, symbol: str, ohlcv: pd.DataFrame,
+                        current_price: float, account_balance: float,
+                        btc_ohlcv: pd.DataFrame = None) -> Optional[TradingSignal]:
+        import time as _time
+        now = _time.time()
+        coin = symbol.replace("-PERP", "")
+        if coin == "BTC":
+            return None
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 60:
+            return None
+        if btc_ohlcv is None or len(btc_ohlcv) < self.lookback + 5:
+            return None
+        if len(ohlcv) < self.lookback + 5:
+            return None
+
+        btc_closes = btc_ohlcv['close']
+        closes = ohlcv['close']
+
+        btc_change = (btc_closes.iloc[-1] - btc_closes.iloc[-self.lookback]) / btc_closes.iloc[-self.lookback]
+        asset_change = (closes.iloc[-1] - closes.iloc[-self.lookback]) / closes.iloc[-self.lookback]
+
+        if abs(btc_change) < self.btc_move_threshold:
+            return None
+
+        vol_mult = 1.5 if coin == "SOL" else 1.0
+        signal = None
+
+        if btc_change > 0 and asset_change < btc_change * self.lag_threshold:
+            confidence = 0.58 + min(0.25, abs(btc_change) * 50)
+            sl = current_price * (1 - 0.005 * vol_mult)
+            tp = current_price * (1 + abs(btc_change) * 1.5)
+            size = (account_balance * 0.10) / current_price
+            signal = TradingSignal(
+                symbol=symbol, signal_type=SignalType.BUY,
+                confidence=min(0.85, confidence), suggested_leverage=self.max_leverage,
+                suggested_size=size, entry_price=current_price,
+                stop_loss=sl, take_profit=tp,
+                rationale=f"Lead-Lag LONG: BTC +{btc_change*100:.2f}%, {coin} only +{asset_change*100:.2f}%"
+            )
+            self.last_signal_time[coin] = now
+
+        elif btc_change < 0 and asset_change > btc_change * self.lag_threshold:
+            confidence = 0.58 + min(0.25, abs(btc_change) * 50)
+            sl = current_price * (1 + 0.005 * vol_mult)
+            tp = current_price * (1 - abs(btc_change) * 1.5)
+            size = (account_balance * 0.10) / current_price
+            signal = TradingSignal(
+                symbol=symbol, signal_type=SignalType.SELL,
+                confidence=min(0.85, confidence), suggested_leverage=self.max_leverage,
+                suggested_size=size, entry_price=current_price,
+                stop_loss=sl, take_profit=tp,
+                rationale=f"Lead-Lag SHORT: BTC {btc_change*100:.2f}%, {coin} only {asset_change*100:.2f}%"
+            )
+            self.last_signal_time[coin] = now
+
+        return signal
+
+
+class FundingRateContrarian:
+    """
+    Extreme funding rates predict price reversals.
+    When funding > 0.1%, longs pay shorts -> market overleveraged long -> short signal.
+    When funding < -0.05%, shorts pay longs -> market overleveraged short -> long signal.
+    """
+
+    def __init__(self, high_funding_threshold: float = 0.001,
+                 low_funding_threshold: float = -0.0005, max_leverage: float = 5.0):
+        self.name = "Funding_Contrarian"
+        self.high_funding_threshold = high_funding_threshold
+        self.low_funding_threshold = low_funding_threshold
+        self.max_leverage = max_leverage
+        self.last_signal_time = {}
+
+    def generate_signal(self, symbol: str, ohlcv: pd.DataFrame = None,
+                        current_price: float = 0, account_balance: float = 0,
+                        funding_rate: float = None) -> Optional[TradingSignal]:
+        import time as _time
+        now = _time.time()
+        coin = symbol.replace("-PERP", "")
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 300:
+            return None
+        if funding_rate is None:
+            return None
+        if current_price <= 0:
+            return None
+
+        vol_mult = 1.5 if coin == "SOL" else 1.0
+        signal = None
+
+        if funding_rate > self.high_funding_threshold:
+            confidence = 0.58 + min(0.3, (funding_rate - self.high_funding_threshold) * 500)
+            sl = current_price * (1 + 0.005 * vol_mult)
+            tp = current_price * (1 - 0.009 * vol_mult)
+            size = (account_balance * 0.08) / current_price
+            signal = TradingSignal(
+                symbol=symbol, signal_type=SignalType.SELL,
+                confidence=min(0.85, confidence), suggested_leverage=self.max_leverage,
+                suggested_size=size, entry_price=current_price,
+                stop_loss=sl, take_profit=tp,
+                rationale=f"Funding SHORT: Rate={funding_rate*100:.3f}% (overleveraged longs)"
+            )
+            self.last_signal_time[coin] = now
+
+        elif funding_rate < self.low_funding_threshold:
+            confidence = 0.58 + min(0.3, (self.low_funding_threshold - funding_rate) * 500)
+            sl = current_price * (1 - 0.005 * vol_mult)
+            tp = current_price * (1 + 0.009 * vol_mult)
+            size = (account_balance * 0.08) / current_price
+            signal = TradingSignal(
+                symbol=symbol, signal_type=SignalType.BUY,
+                confidence=min(0.85, confidence), suggested_leverage=self.max_leverage,
+                suggested_size=size, entry_price=current_price,
+                stop_loss=sl, take_profit=tp,
+                rationale=f"Funding LONG: Rate={funding_rate*100:.3f}% (overleveraged shorts)"
+            )
+            self.last_signal_time[coin] = now
+
+        return signal
+
+
+class VolatilitySqueeze:
+    """
+    Keltner Channel + Bollinger Band squeeze detection.
+    When BBs contract inside KC, low-vol regime detected.
+    Trade the breakout with volume confirmation.
+    """
+
+    def __init__(self, bb_period: int = 20, bb_std: float = 2.0,
+                 kc_atr_mult: float = 1.5, atr_period: int = 10,
+                 max_leverage: float = 5.0):
+        self.name = "Vol_Squeeze"
+        self.bb_period = bb_period
+        self.bb_std = bb_std
+        self.kc_atr_mult = kc_atr_mult
+        self.atr_period = atr_period
+        self.max_leverage = max_leverage
+        self.indicators = TechnicalIndicators()
+        self.last_signal_time = {}
+
+    def generate_signal(self, symbol: str, ohlcv: pd.DataFrame,
+                        current_price: float, account_balance: float) -> Optional[TradingSignal]:
+        import time as _time
+        now = _time.time()
+        coin = symbol.replace("-PERP", "")
+        if coin in self.last_signal_time and now - self.last_signal_time[coin] < 60:
+            return None
+
+        if len(ohlcv) < self.bb_period + 10:
+            return None
+
+        closes = ohlcv['close']
+        highs = ohlcv['high']
+        lows = ohlcv['low']
+        volumes = ohlcv.get('volume', pd.Series([1] * len(ohlcv)))
+
+        upper_bb, middle_bb, lower_bb = self.indicators.bollinger_bands(closes, self.bb_period, self.bb_std)
+        atr = self.indicators.atr(highs, lows, closes, self.atr_period)
+        ema = self.indicators.ema(closes, 20)
+
+        if pd.isna(upper_bb.iloc[-1]) or pd.isna(atr.iloc[-1]) or pd.isna(ema.iloc[-1]):
+            return None
+
+        upper_kc = ema + atr * self.kc_atr_mult
+        lower_kc = ema - atr * self.kc_atr_mult
+
+        bb_width = upper_bb.iloc[-1] - lower_bb.iloc[-1]
+        kc_width = upper_kc.iloc[-1] - lower_kc.iloc[-1]
+
+        if kc_width <= 0:
+            return None
+
+        is_squeezed = bb_width < kc_width
+
+        if not is_squeezed:
+            return None
+
+        avg_vol = volumes.rolling(20).mean().iloc[-1] if len(volumes) >= 20 else 1
+        cur_vol = volumes.iloc[-1]
+        vol_spike = cur_vol > avg_vol * 1.5 if avg_vol > 0 else True
+
+        if not vol_spike:
+            return None
+
+        prev_close = closes.iloc[-2]
+        vol_mult = 1.5 if coin == "SOL" else 1.0
+        signal = None
+
+        if current_price > upper_bb.iloc[-1] and prev_close <= upper_bb.iloc[-2]:
+            sl = middle_bb.iloc[-1] * (1 - 0.003 * vol_mult)
+            tp = current_price + (current_price - middle_bb.iloc[-1]) * 1.5
+            size = (account_balance * 0.10) / current_price
+            signal = TradingSignal(
+                symbol=symbol, signal_type=SignalType.BUY,
+                confidence=0.65, suggested_leverage=self.max_leverage,
+                suggested_size=size, entry_price=current_price,
+                stop_loss=sl, take_profit=tp,
+                rationale=f"Squeeze Break LONG: BB/KC squeeze, volume spike, breakout"
+            )
+            self.last_signal_time[coin] = now
+
+        elif current_price < lower_bb.iloc[-1] and prev_close >= lower_bb.iloc[-2]:
+            sl = middle_bb.iloc[-1] * (1 + 0.003 * vol_mult)
+            tp = current_price - (middle_bb.iloc[-1] - current_price) * 1.5
+            size = (account_balance * 0.10) / current_price
+            signal = TradingSignal(
+                symbol=symbol, signal_type=SignalType.SELL,
+                confidence=0.65, suggested_leverage=self.max_leverage,
+                suggested_size=size, entry_price=current_price,
+                stop_loss=sl, take_profit=tp,
+                rationale=f"Squeeze Break SHORT: BB/KC squeeze, volume spike, breakdown"
+            )
+            self.last_signal_time[coin] = now
+
+        return signal
+
+
 # Export all strategies
 __all__ = [
     'AggressiveADXScalper',
-    'AggressiveCryptoScalper', 
+    'AggressiveCryptoScalper',
     'BreakoutHunter',
     'MeanReversionBandit',
     'SmartMoneyConcepts',
     'FibonacciRetracement',
     'VWAPStrategy',
     'MACDStrategy',
+    'CrossAssetLeadLag',
+    'FundingRateContrarian',
+    'VolatilitySqueeze',
     'TradingSignal',
     'SignalType',
     'TechnicalIndicators'
